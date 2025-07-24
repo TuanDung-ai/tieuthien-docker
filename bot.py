@@ -3,17 +3,19 @@ import requests
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")  # Biến môi trường Zeabur
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-# Hàm gửi tin nhắn lên OpenRouter AI
+if not BOT_TOKEN or not OPENROUTER_API_KEY:
+    raise ValueError("❌ Thiếu BOT_TOKEN hoặc OPENROUTER_API_KEY!")
+
 def chat_with_ai(user_message):
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json"
     }
     data = {
-        "model": "openai/gpt-3.5-turbo",  # hoặc: "mistralai/mistral-7b-instruct"
+        "model": "openai/gpt-3.5-turbo",
         "messages": [{"role": "user", "content": user_message}],
         "temperature": 0.7
     }
@@ -24,19 +26,18 @@ def chat_with_ai(user_message):
         reply = response.json()['choices'][0]['message']['content']
         return reply.strip()
     else:
-        return "⚠️ Tiểu Thiên đang gặp chút sự cố khi truy cập AI..."
+        print(f"⚠️ OpenRouter API lỗi {response.status_code}: {response.text}")
+        return "⚠️ Tiểu Thiên không thể kết nối AI, hãy thử lại sau..."
 
-# Lệnh /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🌟 Tiểu Thiên (AI) đã sẵn sàng! Hãy trò chuyện hoặc hỏi điều gì đó nhé.")
+    await update.message.reply_text("🌟 Tiểu Thiên đã sẵn sàng! Hãy trò chuyện cùng mình nhé.")
 
-# Xử lý mọi tin nhắn → gửi lên AI → phản hồi
 async def reply_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_input = update.message.text
+    print(f"📥 User: {user_input}")
     reply = chat_with_ai(user_input)
     await update.message.reply_text(reply)
 
-# Khởi động bot
 if __name__ == "__main__":
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
