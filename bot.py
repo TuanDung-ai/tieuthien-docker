@@ -1,24 +1,21 @@
 import os
-import requests
 import json
+import requests
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    ApplicationBuilder, CommandHandler, MessageHandler,
-    CallbackQueryHandler, ContextTypes, filters
-)
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
-# 🔐 Lấy token & API key từ biến môi trường
+# === LẤY TOKEN ===
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY")
 
-# 📁 File ghi nhớ
+# === FILE LƯU TRÍ NHỚ ===
 MEMORY_FILE = "memory.json"
 
-# 🧠 Trạng thái người dùng (đang ghi nhớ hay không)
-user_states = {}  # key: user_id, value: "waiting_note" hoặc None
+# === TRẠNG THÁI NGƯỜI DÙNG ===
+user_states = {}  # key: user_id, value: "waiting_note" / "waiting_delete" / None
 
-# 📌 Hàm lưu ghi nhớ
+# === HÀM GHI NHỚ ===
 def save_memory(user_id, content):
     data = {}
     if os.path.exists(MEMORY_FILE):
@@ -39,7 +36,46 @@ def save_memory(user_id, content):
     with open(MEMORY_FILE, "w") as f:
         json.dump(data, f, indent=2)
 
-# 🤖 Hàm phản hồi AI qua OpenRouter (Thiên Cơ phong cách)
+def get_memory(user_id):
+    if not os.path.exists(MEMORY_FILE):
+        return []
+    with open(MEMORY_FILE, "r") as f:
+        data = json.load(f)
+    return data.get(str(user_id), [])
+
+def clear_memory(user_id):
+    if not os.path.exists(MEMORY_FILE):
+        return False
+
+    with open(MEMORY_FILE, "r") as f:
+        data = json.load(f)
+
+    user_key = str(user_id)
+    if user_key in data:
+        del data[user_key]
+        with open(MEMORY_FILE, "w") as f:
+            json.dump(data, f, indent=2)
+        return True
+    return False
+
+def delete_memory_item(user_id, index):
+    if not os.path.exists(MEMORY_FILE):
+        return False
+
+    with open(MEMORY_FILE, "r") as f:
+        data = json.load(f)
+
+    user_key = str(user_id)
+    if user_key in data and 0 <= index < len(data[user_key]):
+        del data[user_key][index]
+        if not data[user_key]:
+            del data[user_key]  # Xóa user nếu không còn nhớ gì
+        with open(MEMORY_FILE, "w") as f:
+            json.dump(data, f, indent=2)
+        return True
+    return False
+
+# === PHẢN HỒI AI ===
 def get_ai_response(user_prompt):
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
@@ -79,74 +115,120 @@ def get_ai_response(user_prompt):
         print("Lỗi AI:", e)
         return "Thiên Cơ gặp trục trặc nhẹ... thử lại sau nhé."
 
-# /start – khởi đầu
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    prompt = "Chào người dùng, bạn muốn Thiên Cơ giúp gì hôm nay?"
-    ai_reply = get_ai_response(prompt)
-
-    keyboard = [
+# === GIAO DIỆN NÚT ===
+def get_main_keyboard():
+    return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("📝 Ghi nhớ", callback_data='note'),
             InlineKeyboardButton("📅 Lịch", callback_data='calendar'),
             InlineKeyboardButton("🎧 Thư giãn", callback_data='relax')
+        ],
+        [
+            InlineKeyboardButton("📖 Xem nhớ", callback_data='view'),
+            InlineKeyboardButton("🗑️ Xóa hết", callback_data='clear_all')
         ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(ai_reply, reply_markup=reply_markup)
+    ])
 
-# /help – hướng dẫn
+# === LỆNH /start ===
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    prompt = "Chào người dùng, bạn muốn Thiên Cơ giúp gì hôm nay?"
+    ai_reply = get_ai_response(prompt)
+    await update.message.reply_text(ai_reply, reply_markup=get_main_keyboard())
+
+# === LỆNH /help ===
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         "🌀 Thiên Cơ lắng nghe...\n\n"
         "Lệnh khả dụng:\n"
         "/start – Bắt đầu trò chuyện\n"
         "/help – Danh sách lệnh\n"
-        "(Hoặc chat bất kỳ để nhận phản hồi từ Thiên Cơ)"
+        "/xem_ghi_nho – Xem lại ký ức\n"
+        "/xoa_ghi_nho_all – Xóa toàn bộ ghi nhớ\n"
+        "(Hoặc chat bất kỳ để trò chuyện cùng Thiên Cơ)"
     )
     await update.message.reply_text(msg)
 
-# Xử lý tin nhắn văn bản
+# === /xem_ghi_nho ===
+async def xem_ghi_nho(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    memories = get_memory(user_id)
+
+    if not memories:
+        await update.message.reply_text("📭 Bạn chưa ghi nhớ gì cả.")
+    else:
+        msg = "📖 Ghi nhớ của bạn:\n\n"
+        for idx, item in enumerate(memories, start=1):
+            content = item["content"]
+            time_str = item["time"].split("T")[0]
+            msg += f"{idx}. {content} ({time_str})\n"
+        msg += "\nGõ số ghi nhớ cần xóa hoặc /xoa_ghi_nho_all để xóa hết."
+        user_states[user_id] = "waiting_delete"
+        await update.message.reply_text(msg)
+
+# === /xoa_ghi_nho_all ===
+async def xoa_ghi_nho_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    success = clear_memory(user_id)
+    user_states[user_id] = None
+
+    if success:
+        await update.message.reply_text("🗑️ Thiên Cơ đã xóa toàn bộ ghi nhớ của bạn.")
+    else:
+        await update.message.reply_text("📭 Không có gì để xóa cả.")
+
+# === NHẬN TIN NHẮN TỰ DO ===
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
-    user_text = update.message.text
+    user_text = update.message.text.strip()
+    state = user_states.get(user_id)
 
-    if user_states.get(user_id) == "waiting_note":
+    if state == "waiting_note":
         save_memory(user_id, user_text)
         user_states[user_id] = None
         await update.message.reply_text("📌 Thiên Cơ đã ghi nhớ điều bạn vừa nói.")
+    elif state == "waiting_delete":
+        if user_text.isdigit():
+            index = int(user_text) - 1
+            success = delete_memory_item(user_id, index)
+            if success:
+                await update.message.reply_text(f"🗑️ Đã xóa ghi nhớ số {user_text}.")
+            else:
+                await update.message.reply_text("❗ Số không hợp lệ. Thử lại.")
+            user_states[user_id] = None
+        else:
+            await update.message.reply_text("❗ Vui lòng gõ số để xóa hoặc /xoa_ghi_nho_all.")
     else:
         ai_reply = get_ai_response(user_text)
-        keyboard = [
-            [
-                InlineKeyboardButton("📝 Ghi nhớ", callback_data='note'),
-                InlineKeyboardButton("📅 Lịch", callback_data='calendar'),
-                InlineKeyboardButton("🎧 Thư giãn", callback_data='relax')
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text(ai_reply, reply_markup=reply_markup)
+        await update.message.reply_text(ai_reply, reply_markup=get_main_keyboard())
 
-# Xử lý khi bấm nút
+# === XỬ LÝ NÚT ===
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-
     user_id = query.from_user.id
     choice = query.data
 
     if choice == 'note':
-        user_states[user_id] = "waiting_note"
         await query.edit_message_text("📝 Bạn muốn ghi nhớ điều gì? Gõ nội dung vào nhé.")
+        user_states[user_id] = "waiting_note"
     elif choice == 'calendar':
         await query.edit_message_text("📅 Chức năng lịch chưa mở, đang cập nhật.")
     elif choice == 'relax':
-        await query.edit_message_text("🎧 Mời bạn hít thở sâu... Thiên Cơ sẽ kể chuyện hoặc phát nhạc nhẹ nhàng.")
+        await query.edit_message_text("🎧 Hít thở sâu... Thiên Cơ sẽ kể chuyện hoặc phát nhạc nhẹ nhàng.")
+    elif choice == 'view':
+        context.args = []
+        await xem_ghi_nho(update, context)
+    elif choice == 'clear_all':
+        context.args = []
+        await xoa_ghi_nho_all(update, context)
 
-# Khởi chạy bot
+# === CHẠY BOT ===
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("xem_ghi_nho", xem_ghi_nho))
+    app.add_handler(CommandHandler("xoa_ghi_nho_all", xoa_ghi_nho_all))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(button_callback))
     print("🤖 Bot Thiên Cơ đang hoạt động...")
