@@ -1,19 +1,17 @@
-# bot.py – phiên bản sạch – chuẩn bị tích hợp Thiên Cơ
-
-import os
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+import os
+from ai_module import get_ai_response  # Import hàm AI từ file riêng
 
-# Lấy token từ biến môi trường hoặc ghi trực tiếp
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")  # Khuyên dùng .env hoặc config Zeabur
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
-# Hàm phản hồi lệnh /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Thiên Cơ đã sẵn sàng. Chờ lệnh...")
+    prompt = "Chào người dùng, bạn muốn Thiên Cơ giúp gì hôm nay?"
+    ai_reply = get_ai_response(prompt)
+    await update.message.reply_text(ai_reply)
 
-# Khởi chạy bot
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    print("🤖 Bot đang chạy... Thiên Cơ khởi động.")
+    print("🤖 Bot đang chạy với AI – Thiên Cơ sống dậy.")
     app.run_polling()
