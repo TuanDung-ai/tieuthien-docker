@@ -5,15 +5,13 @@ from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
-# === LẤY TOKEN ===
+# === TOKEN và API KEY ===
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY")
 
-# === FILE LƯU TRÍ NHỚ ===
+# === FILE LƯU NHỚ ===
 MEMORY_FILE = "memory.json"
-
-# === TRẠNG THÁI NGƯỜI DÙNG ===
-user_states = {}  # key: user_id, value: "waiting_note" / "waiting_delete" / None
+user_states = {}  # user_id → trạng thái: None / waiting_note / waiting_delete
 
 # === HÀM GHI NHỚ ===
 def save_memory(user_id, content):
@@ -46,10 +44,8 @@ def get_memory(user_id):
 def clear_memory(user_id):
     if not os.path.exists(MEMORY_FILE):
         return False
-
     with open(MEMORY_FILE, "r") as f:
         data = json.load(f)
-
     user_key = str(user_id)
     if user_key in data:
         del data[user_key]
@@ -61,15 +57,13 @@ def clear_memory(user_id):
 def delete_memory_item(user_id, index):
     if not os.path.exists(MEMORY_FILE):
         return False
-
     with open(MEMORY_FILE, "r") as f:
         data = json.load(f)
-
     user_key = str(user_id)
     if user_key in data and 0 <= index < len(data[user_key]):
         del data[user_key][index]
         if not data[user_key]:
-            del data[user_key]  # Xóa user nếu không còn nhớ gì
+            del data[user_key]
         with open(MEMORY_FILE, "w") as f:
             json.dump(data, f, indent=2)
         return True
@@ -150,11 +144,17 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # === /xem_ghi_nho ===
 async def xem_ghi_nho(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
+    if update.message:
+        user_id = update.message.from_user.id
+        send = update.message.reply_text
+    else:
+        user_id = update.callback_query.from_user.id
+        send = update.callback_query.edit_message_text
+
     memories = get_memory(user_id)
 
     if not memories:
-        await update.message.reply_text("📭 Bạn chưa ghi nhớ gì cả.")
+        await send("📭 Bạn chưa ghi nhớ gì cả.")
     else:
         msg = "📖 Ghi nhớ của bạn:\n\n"
         for idx, item in enumerate(memories, start=1):
@@ -163,20 +163,26 @@ async def xem_ghi_nho(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msg += f"{idx}. {content} ({time_str})\n"
         msg += "\nGõ số ghi nhớ cần xóa hoặc /xoa_ghi_nho_all để xóa hết."
         user_states[user_id] = "waiting_delete"
-        await update.message.reply_text(msg)
+        await send(msg)
 
 # === /xoa_ghi_nho_all ===
 async def xoa_ghi_nho_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
+    if update.message:
+        user_id = update.message.from_user.id
+        send = update.message.reply_text
+    else:
+        user_id = update.callback_query.from_user.id
+        send = update.callback_query.edit_message_text
+
     success = clear_memory(user_id)
     user_states[user_id] = None
 
     if success:
-        await update.message.reply_text("🗑️ Thiên Cơ đã xóa toàn bộ ghi nhớ của bạn.")
+        await send("🗑️ Thiên Cơ đã xóa toàn bộ ghi nhớ của bạn.")
     else:
-        await update.message.reply_text("📭 Không có gì để xóa cả.")
+        await send("📭 Không có gì để xóa cả.")
 
-# === NHẬN TIN NHẮN TỰ DO ===
+# === XỬ LÝ TIN NHẮN ===
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_text = update.message.text.strip()
@@ -216,13 +222,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif choice == 'relax':
         await query.edit_message_text("🎧 Hít thở sâu... Thiên Cơ sẽ kể chuyện hoặc phát nhạc nhẹ nhàng.")
     elif choice == 'view':
-        context.args = []
         await xem_ghi_nho(update, context)
     elif choice == 'clear_all':
-        context.args = []
         await xoa_ghi_nho_all(update, context)
 
-# === CHẠY BOT ===
+# === KHỞI CHẠY BOT ===
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
@@ -231,5 +235,5 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("xoa_ghi_nho_all", xoa_ghi_nho_all))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(button_callback))
-    print("🤖 Bot Thiên Cơ đang hoạt động...")
+    print("🤖 Bot Thiên Cơ đã hồi sinh và vận hành...")
     app.run_polling()
