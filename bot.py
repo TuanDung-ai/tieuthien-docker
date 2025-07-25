@@ -2,6 +2,9 @@ import os
 import json
 import requests
 from datetime import datetime
+from flask import Flask
+import threading
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
@@ -85,15 +88,12 @@ def delete_memory_item(user_id, index):
         return True
     return False
 
-# === HÀM ĐỊNH DẠNG PHẢN HỒI AI (Bước 4.3.1) ===
+# === HÀM ĐỊNH DẠNG PHẢN HỒI AI ===
 def format_ai_response(text):
-    # Khung cố định, trầm ổn, emoji nhẹ nhàng, tối đa 3 câu
     lines = text.strip().split('\n')
     short_text = " ".join(line.strip() for line in lines if line.strip())
     if len(short_text) > 500:
         short_text = short_text[:497] + "..."
-
-    # Thêm emoji gợi ý ở cuối
     footer = "\n\n💡 Bạn cần gì tiếp theo? Ví dụ: '📝 Ghi nhớ', '📅 Lịch', '🎧 Thư giãn'."
     return f"🤖 Thiên Cơ:\n\n{short_text}{footer}"
 
@@ -111,9 +111,7 @@ def get_ai_response(user_prompt):
             "content": (
                 "Bạn là Thiên Cơ – một AI trợ lý cá nhân đáng tin cậy. "
                 "Giọng điệu trầm ổn, chính xác, nhẹ nhàng, thỉnh thoảng có chút hài hước nhẹ. "
-                "Luôn trả lời ngắn gọn, không quá 3 câu. Cuối mỗi phản hồi, đưa ra gợi ý tiếp theo phù hợp. "
-                "Ví dụ: 'Bạn cần ghi nhớ điều gì?', 'Thiên Cơ có thể nhắc lịch, tâm sự hoặc kể chuyện...'. "
-                "Nếu không rõ câu hỏi, hãy hỏi lại nhẹ nhàng. Không trả lời quá dài hay lan man."
+                "Luôn trả lời ngắn gọn, không quá 3 câu. Cuối mỗi phản hồi, đưa ra gợi ý tiếp theo phù hợp."
             )
         },
         {
@@ -152,13 +150,12 @@ def get_main_keyboard():
         ]
     ])
 
-# === LỆNH /start ===
+# === LỆNH ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prompt = "Chào người dùng, bạn muốn Thiên Cơ giúp gì hôm nay?"
     ai_reply = get_ai_response(prompt)
     await update.message.reply_text(ai_reply, reply_markup=get_main_keyboard())
 
-# === LỆNH /help ===
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         "🌀 Thiên Cơ lắng nghe...\n\n"
@@ -171,7 +168,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(msg)
 
-# === /xem_ghi_nho ===
 async def xem_ghi_nho(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message:
         user_id = update.message.from_user.id
@@ -181,7 +177,6 @@ async def xem_ghi_nho(update: Update, context: ContextTypes.DEFAULT_TYPE):
         send = update.callback_query.edit_message_text
 
     memories = get_memory(user_id)
-
     if not memories:
         await send("📭 Bạn chưa ghi nhớ gì cả.")
     else:
@@ -194,7 +189,6 @@ async def xem_ghi_nho(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_states[user_id] = "waiting_delete"
         await send(msg)
 
-# === /xoa_ghi_nho_all ===
 async def xoa_ghi_nho_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message:
         user_id = update.message.from_user.id
@@ -205,13 +199,11 @@ async def xoa_ghi_nho_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     success = clear_memory(user_id)
     user_states[user_id] = None
-
     if success:
         await send("🗑️ Thiên Cơ đã xóa toàn bộ ghi nhớ của bạn.")
     else:
         await send("📭 Không có gì để xóa cả.")
 
-# === XỬ LÝ TIN NHẮN ===
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_text = update.message.text.strip()
@@ -236,7 +228,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ai_reply = get_ai_response(user_text)
         await update.message.reply_text(ai_reply, reply_markup=get_main_keyboard())
 
-# === XỬ LÝ NÚT ===
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -255,8 +246,20 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif choice == 'clear_all':
         await xoa_ghi_nho_all(update, context)
 
-# === KHỞI CHẠY BOT ===
+# === FLASK SERVER CHO UPTIMEROBOT ===
+web_app = Flask(__name__)
+
+@web_app.route('/')
+@web_app.route('/health')
+def health_check():
+    return "✅ Tiểu Thiên đang vận hành bình thường."
+
+def run_web_app():
+    web_app.run(host="0.0.0.0", port=8080)
+
+# === KHỞI CHẠY BOT & FLASK SONG SONG ===
 if __name__ == '__main__':
+    threading.Thread(target=run_web_app).start()
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
