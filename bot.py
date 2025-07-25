@@ -1,3 +1,6 @@
+# Tiểu Thiên – AI Telegram Bot (Nâng cấp trí nhớ)
+
+```python
 import os
 import json
 import requests
@@ -16,8 +19,8 @@ OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY")
 MEMORY_FILE = "memory.json"
 user_states = {}  # user_id → trạng thái: None / waiting_note / waiting_delete
 
-# === HÀM GHI NHỚ ===
-def save_memory(user_id, content):
+# === HÀM GHI NHỚ PHÂN LOẠI ===
+def save_memory(user_id, content, note_type="khác"):
     data = {}
     if os.path.exists(MEMORY_FILE):
         try:
@@ -33,6 +36,7 @@ def save_memory(user_id, content):
 
     memory_item = {
         "content": content,
+        "type": note_type,
         "time": datetime.now().isoformat()
     }
 
@@ -41,17 +45,22 @@ def save_memory(user_id, content):
     with open(MEMORY_FILE, "w") as f:
         json.dump(data, f, indent=2)
 
-def get_memory(user_id):
+# === LẤY GHI NHỚ (lọc loại nếu cần) ===
+def get_memory(user_id, note_type=None):
     if not os.path.exists(MEMORY_FILE):
         return []
     try:
         with open(MEMORY_FILE, "r") as f:
             data = json.load(f)
-        return data.get(str(user_id), [])
+        all_notes = data.get(str(user_id), [])
+        if note_type:
+            return [note for note in all_notes if note["type"] == note_type]
+        return all_notes
     except Exception as e:
         print("Lỗi đọc file ghi nhớ:", e)
         return []
 
+# === XÓA GHI NHỚ ===
 def clear_memory(user_id):
     if not os.path.exists(MEMORY_FILE):
         return False
@@ -88,35 +97,47 @@ def delete_memory_item(user_id, index):
         return True
     return False
 
+# === TRA CỨU GHI NHỚ GẦN NHẤT ===
+def get_recent_memories_for_prompt(user_id, limit=3):
+    notes = get_memory(user_id)
+    notes.sort(key=lambda x: x["time"], reverse=True)
+    recent = notes[:limit]
+    return "\n".join(f"- ({n['type']}) {n['content']}" for n in recent)
+
 # === HÀM ĐỊNH DẠNG PHẢN HỒI AI ===
 def format_ai_response(text):
     lines = text.strip().split('\n')
     short_text = " ".join(line.strip() for line in lines if line.strip())
     if len(short_text) > 500:
         short_text = short_text[:497] + "..."
-    footer = "\n\n💡 Bạn cần gì tiếp theo? Ví dụ: '📝 Ghi nhớ', '📅 Lịch', '🎧 Thư giãn'."
-    return f"🤖 Thiên Cơ:\n\n{short_text}{footer}"
+    footer = "\n\n\ud83d\udca1 Bạn cần gì tiếp theo? Ví dụ: '\ud83d\udcdd Ghi nhớ', '\ud83d\udcc5 Lịch', '\ud83c\udfb7 Thư giãn'."
+    return f"\ud83e\udd16 Thiên Cơ:\n\n{short_text}{footer}"
 
-# === PHẢN HỒI AI ===
-def get_ai_response(user_prompt):
+# === PHẢN HỒI AI (có chèn ghi nhớ) ===
+def get_ai_response(user_prompt, user_id=None):
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {OPENROUTER_KEY}",
         "Content-Type": "application/json"
     }
 
+    memory_context = ""
+    if user_id:
+        mems = get_recent_memories_for_prompt(user_id)
+        if mems:
+            memory_context = f"Người dùng trước đó đã ghi nhớ:\n{mems}\n\n"
+
     messages = [
         {
             "role": "system",
             "content": (
-                "Bạn là Thiên Cơ – một AI trợ lý cá nhân đáng tin cậy. "
-                "Giọng điệu trầm ổn, chính xác, nhẹ nhàng, thỉnh thoảng có chút hài hước nhẹ. "
-                "Luôn trả lời ngắn gọn, không quá 3 câu. Cuối mỗi phản hồi, đưa ra gợi ý tiếp theo phù hợp."
+                "Bạn là Thiên Cơ – AI trợ lý cá nhân đáng tin cậy. "
+                "Luôn trả lời trầm ổn, chính xác, tối đa 3 câu, có thể sử dụng dữ kiện cũ."
             )
         },
         {
             "role": "user",
-            "content": user_prompt
+            "content": memory_context + user_prompt
         }
     ]
 
@@ -153,7 +174,7 @@ def get_main_keyboard():
 # === LỆNH ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prompt = "Chào người dùng, bạn muốn Thiên Cơ giúp gì hôm nay?"
-    ai_reply = get_ai_response(prompt)
+    ai_reply = get_ai_response(prompt, user_id=update.message.from_user.id)
     await update.message.reply_text(ai_reply, reply_markup=get_main_keyboard())
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -183,8 +204,9 @@ async def xem_ghi_nho(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = "📖 Ghi nhớ của bạn:\n\n"
         for idx, item in enumerate(memories, start=1):
             content = item["content"]
+            note_type = item.get("type", "khác")
             time_str = item["time"].split("T")[0]
-            msg += f"{idx}. {content} ({time_str})\n"
+            msg += f"{idx}. ({note_type}) {content} ({time_str})\n"
         msg += "\nGõ số ghi nhớ cần xóa hoặc /xoa_ghi_nho_all để xóa hết."
         user_states[user_id] = "waiting_delete"
         await send(msg)
@@ -210,9 +232,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     state = user_states.get(user_id)
 
     if state == "waiting_note":
-        save_memory(user_id, user_text)
+        save_memory(user_id, user_text, note_type="khác")
         user_states[user_id] = None
-        await update.message.reply_text("📌 Thiên Cơ đã ghi nhớ điều bạn vừa nói.")
+        await update.message.reply_text(
+            "📌 Thiên Cơ đã ghi nhớ điều bạn vừa nói.\n\n👉 Bạn có muốn phân loại không? (ví dụ: tâm sự, sự kiện, nhắc lịch)"
+        )
     elif state == "waiting_delete":
         if user_text.isdigit():
             index = int(user_text) - 1
@@ -225,7 +249,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text("❗ Vui lòng gõ số để xóa hoặc /xoa_ghi_nho_all.")
     else:
-        ai_reply = get_ai_response(user_text)
+        ai_reply = get_ai_response(user_text, user_id=user_id)
         await update.message.reply_text(ai_reply, reply_markup=get_main_keyboard())
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -269,3 +293,4 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(button_callback))
     print("🤖 Bot Thiên Cơ đã hồi sinh và vận hành...")
     app.run_polling()
+```
