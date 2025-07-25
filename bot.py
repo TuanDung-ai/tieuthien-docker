@@ -17,8 +17,12 @@ user_states = {}  # user_id → trạng thái: None / waiting_note / waiting_del
 def save_memory(user_id, content):
     data = {}
     if os.path.exists(MEMORY_FILE):
-        with open(MEMORY_FILE, "r") as f:
-            data = json.load(f)
+        try:
+            with open(MEMORY_FILE, "r") as f:
+                data = json.load(f)
+        except Exception as e:
+            print("Lỗi đọc file ghi nhớ:", e)
+            data = {}
 
     user_key = str(user_id)
     if user_key not in data:
@@ -37,15 +41,23 @@ def save_memory(user_id, content):
 def get_memory(user_id):
     if not os.path.exists(MEMORY_FILE):
         return []
-    with open(MEMORY_FILE, "r") as f:
-        data = json.load(f)
-    return data.get(str(user_id), [])
+    try:
+        with open(MEMORY_FILE, "r") as f:
+            data = json.load(f)
+        return data.get(str(user_id), [])
+    except Exception as e:
+        print("Lỗi đọc file ghi nhớ:", e)
+        return []
 
 def clear_memory(user_id):
     if not os.path.exists(MEMORY_FILE):
         return False
-    with open(MEMORY_FILE, "r") as f:
-        data = json.load(f)
+    try:
+        with open(MEMORY_FILE, "r") as f:
+            data = json.load(f)
+    except Exception as e:
+        print("Lỗi đọc file ghi nhớ:", e)
+        return False
     user_key = str(user_id)
     if user_key in data:
         del data[user_key]
@@ -57,8 +69,12 @@ def clear_memory(user_id):
 def delete_memory_item(user_id, index):
     if not os.path.exists(MEMORY_FILE):
         return False
-    with open(MEMORY_FILE, "r") as f:
-        data = json.load(f)
+    try:
+        with open(MEMORY_FILE, "r") as f:
+            data = json.load(f)
+    except Exception as e:
+        print("Lỗi đọc file ghi nhớ:", e)
+        return False
     user_key = str(user_id)
     if user_key in data and 0 <= index < len(data[user_key]):
         del data[user_key][index]
@@ -68,6 +84,18 @@ def delete_memory_item(user_id, index):
             json.dump(data, f, indent=2)
         return True
     return False
+
+# === HÀM ĐỊNH DẠNG PHẢN HỒI AI (Bước 4.3.1) ===
+def format_ai_response(text):
+    # Khung cố định, trầm ổn, emoji nhẹ nhàng, tối đa 3 câu
+    lines = text.strip().split('\n')
+    short_text = " ".join(line.strip() for line in lines if line.strip())
+    if len(short_text) > 500:
+        short_text = short_text[:497] + "..."
+
+    # Thêm emoji gợi ý ở cuối
+    footer = "\n\n💡 Bạn cần gì tiếp theo? Ví dụ: '📝 Ghi nhớ', '📅 Lịch', '🎧 Thư giãn'."
+    return f"🤖 Thiên Cơ:\n\n{short_text}{footer}"
 
 # === PHẢN HỒI AI ===
 def get_ai_response(user_prompt):
@@ -104,10 +132,11 @@ def get_ai_response(user_prompt):
     try:
         response = requests.post(url, headers=headers, json=payload)
         data = response.json()
-        return data["choices"][0]["message"]["content"]
+        raw_text = data["choices"][0]["message"]["content"]
+        return format_ai_response(raw_text)
     except Exception as e:
         print("Lỗi AI:", e)
-        return "Thiên Cơ gặp trục trặc nhẹ... thử lại sau nhé."
+        return "⚠️ Thiên Cơ gặp trục trặc nhẹ... thử lại sau nhé."
 
 # === GIAO DIỆN NÚT ===
 def get_main_keyboard():
