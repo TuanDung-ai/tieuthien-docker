@@ -1,6 +1,5 @@
 # Tiểu Thiên – AI Telegram Bot (Nâng cấp trí nhớ)
 
-```python
 import os
 import json
 import requests
