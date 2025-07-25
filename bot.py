@@ -1,5 +1,3 @@
-# Tiểu Thiên – AI Telegram Bot (Nâng cấp trí nhớ)
-
 import os
 import json
 import requests
@@ -16,7 +14,7 @@ OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY")
 
 # === FILE LƯU NHỚ ===
 MEMORY_FILE = "memory.json"
-user_states = {}  # user_id → trạng thái: None / waiting_note / waiting_delete
+user_states = {}  # user_id → trạng thái: None / waiting_note / waiting_delete / choosing_type
 
 # === HÀM GHI NHỚ PHÂN LOẠI ===
 def save_memory(user_id, content, note_type="khác"):
@@ -96,6 +94,23 @@ def delete_memory_item(user_id, index):
         return True
     return False
 
+# === CẬP NHẬT PHÂN LOẠI CHO GHI NHỚ MỚI NHẤT ===
+def update_latest_memory_type(user_id, note_type):
+    if not os.path.exists(MEMORY_FILE):
+        return False
+    try:
+        with open(MEMORY_FILE, "r") as f:
+            data = json.load(f)
+        user_key = str(user_id)
+        if user_key in data and data[user_key]:
+            data[user_key][-1]["type"] = note_type
+            with open(MEMORY_FILE, "w") as f:
+                json.dump(data, f, indent=2)
+            return True
+    except Exception as e:
+        print("Lỗi cập nhật loại ghi nhớ:", e)
+    return False
+
 # === TRA CỨU GHI NHỚ GẦN NHẤT ===
 def get_recent_memories_for_prompt(user_id, limit=3):
     notes = get_memory(user_id)
@@ -170,6 +185,19 @@ def get_main_keyboard():
         ]
     ])
 
+# === NÚT CHỌN LOẠI GHI NHỚ ===
+def get_note_type_keyboard():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("💬 Tâm sự", callback_data='type_tamsu'),
+            InlineKeyboardButton("⏰ Nhắc nhở", callback_data='type_nhacnho')
+        ],
+        [
+            InlineKeyboardButton("💡 Ý tưởng", callback_data='type_ytuong'),
+            InlineKeyboardButton("📂 Cá nhân", callback_data='type_canhan')
+        ]
+    ])
+
 # === LỆNH ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prompt = "Chào người dùng, bạn muốn Thiên Cơ giúp gì hôm nay?"
@@ -232,9 +260,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if state == "waiting_note":
         save_memory(user_id, user_text, note_type="khác")
-        user_states[user_id] = None
+        user_states[user_id] = "choosing_type"
         await update.message.reply_text(
-            "📌 Thiên Cơ đã ghi nhớ điều bạn vừa nói.\n\n👉 Bạn có muốn phân loại không? (ví dụ: tâm sự, sự kiện, nhắc lịch)"
+            "📌 Thiên Cơ đã ghi nhớ. Chọn loại cho ghi nhớ này:",
+            reply_markup=get_note_type_keyboard()
         )
     elif state == "waiting_delete":
         if user_text.isdigit():
@@ -268,6 +297,20 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await xem_ghi_nho(update, context)
     elif choice == 'clear_all':
         await xoa_ghi_nho_all(update, context)
+    elif choice.startswith('type_'):
+        type_map = {
+            'type_tamsu': 'tâm sự',
+            'type_nhacnho': 'nhắc nhở',
+            'type_ytuong': 'ý tưởng',
+            'type_canhan': 'cá nhân'
+        }
+        note_type = type_map.get(choice, 'khác')
+        success = update_latest_memory_type(user_id, note_type)
+        if success:
+            await query.edit_message_text(f"📂 Ghi nhớ đã được phân loại: {note_type}.")
+        else:
+            await query.edit_message_text("⚠️ Không thể cập nhật loại ghi nhớ.")
+        user_states[user_id] = None
 
 # === FLASK SERVER CHO UPTIMEROBOT ===
 web_app = Flask(__name__)
