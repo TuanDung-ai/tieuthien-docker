@@ -109,8 +109,8 @@ def format_ai_response(text):
     short_text = " ".join(line.strip() for line in lines if line.strip())
     if len(short_text) > 500:
         short_text = short_text[:497] + "..."
-    footer = "\n\n\ud83d\udca1 Bạn cần gì tiếp theo? Ví dụ: '\ud83d\udcdd Ghi nhớ', '\ud83d\udcc5 Lịch', '\ud83c\udfb7 Thư giãn'."
-    return f"\ud83e\udd16 Thiên Cơ:\n\n{short_text}{footer}"
+    footer = "\n\n💡 Bạn cần gì tiếp theo? Ví dụ: '📝 Ghi nhớ', '📅 Lịch', '🎧 Thư giãn'."
+    return f"🤖 Thiên Cơ:\n\n{short_text}{footer}"
 
 # === PHẢN HỒI AI (có chèn ghi nhớ) ===
 def get_ai_response(user_prompt, user_id=None):
