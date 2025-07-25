@@ -292,4 +292,3 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(button_callback))
     print("🤖 Bot Thiên Cơ đã hồi sinh và vận hành...")
     app.run_polling()
-```
