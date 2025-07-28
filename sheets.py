@@ -1,77 +1,74 @@
-import gspread
-import json
-from google.oauth2.service_account import Credentials
-from datetime import datetime
+# sheets.py
 import os
+import json
+import gspread
+from datetime import datetime
+from oauth2client.service_account import ServiceAccountCredentials
 
-# === ĐỌC GOOGLE CREDENTIAL TỪ ENV BIẾN ===
-creds_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
-if creds_json is None:
-    raise Exception("❗ Thiếu biến GOOGLE_CREDENTIALS_JSON – kiểm tra Zeabur.")
+# === KẾT NỐI GOOGLE SHEETS ===
+credentials_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
+if not credentials_json:
+    raise ValueError("Thiếu biến môi trường GOOGLE_CREDENTIALS_JSON")
 
-creds_data = json.loads(creds_json)
-
-SCOPE = ["https://www.googleapis.com/auth/spreadsheets"]
-SPREADSHEET_NAME = "MemorySheet"  # Đúng tên sheet bạn đã tạo
-
-creds = Credentials.from_service_account_info(creds_data, scopes=SCOPE)
+credentials_dict = json.loads(credentials_json)
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
+creds = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict, scope)
 client = gspread.authorize(creds)
-sheet = client.open(SPREADSHEET_NAME).sheet1
 
-# === GHI NHỚ ===
+SPREADSHEET_NAME = "memorysheet"
+SHEET_NAME = "Sheet1"
+spreadsheet = client.open(SPREADSHEET_NAME)
+sheet = spreadsheet.worksheet(SHEET_NAME)
+
+# === HÀM GHI NHỚ ===
 def save_memory(user_id, content, note_type="khác"):
     time_str = datetime.now().isoformat()
-    row = [str(user_id), content, note_type, time_str]
-    sheet.append_row(row)
+    sheet.append_row([str(user_id), content, note_type, time_str])
 
 # === LẤY GHI NHỚ ===
 def get_memory(user_id, note_type=None):
     all_data = sheet.get_all_values()
-    result = []
-    for row in all_data[1:]:  # bỏ dòng tiêu đề
-        uid, content, ntype, time_str = row
-        if uid == str(user_id):
-            if note_type is None or note_type == ntype:
-                result.append({
-                    "content": content,
-                    "type": ntype,
-                    "time": time_str
-                })
-    return result
+    user_notes = []
+    for row in all_data[1:]:
+        if row[0] == str(user_id):
+            note = {"content": row[1], "type": row[2], "time": row[3]}
+            if note_type is None or note["type"] == note_type:
+                user_notes.append(note)
+    return user_notes
 
-# === TÌM KIẾM ===
+# === TÌM KIẾM GHI NHỚ ===
 def search_memory(user_id, keyword):
-    keyword = keyword.lower()
     notes = get_memory(user_id)
     result = []
+    keyword_lower = keyword.lower()
     for idx, note in enumerate(notes):
-        if keyword in note["content"].lower() or keyword in note["type"].lower():
+        if keyword_lower in note["content"].lower() or keyword_lower in note["type"].lower():
             result.append((idx, note))
     return result
 
-# === XÓA TOÀN BỘ GHI NHỚ USER ===
+# === XÓA TOÀN BỘ GHI NHỚ ===
 def clear_memory(user_id):
     all_data = sheet.get_all_values()
     indexes_to_delete = []
     for idx, row in enumerate(all_data[1:], start=2):
         if row[0] == str(user_id):
             indexes_to_delete.append(idx)
-    for idx in reversed(indexes_to_delete):
-        sheet.delete_rows(idx)
-    return len(indexes_to_delete) > 0
+    for i in reversed(indexes_to_delete):
+        sheet.delete_rows(i)
+    return bool(indexes_to_delete)
 
-# === CẬP NHẬT LOẠI CHO GHI NHỚ MỚI NHẤT ===
+# === CẬP NHẬT LOẠI GHI NHỚ MỚI NHẤT ===
 def update_latest_memory_type(user_id, note_type):
     all_data = sheet.get_all_values()
-    latest_idx = -1
-    for idx, row in enumerate(reversed(all_data[1:]), start=1):
+    user_rows = []
+    for idx, row in enumerate(all_data[1:], start=2):
         if row[0] == str(user_id):
-            latest_idx = len(all_data) - idx
-            break
-    if latest_idx != -1:
-        sheet.update_cell(latest_idx + 1, 3, note_type)
-        return True
-    return False
+            user_rows.append((idx, row))
+    if not user_rows:
+        return False
+    latest_row_idx = user_rows[-1][0]
+    sheet.update_cell(latest_row_idx, 3, note_type)
+    return True
 
 # === LẤY GHI NHỚ GẦN NHẤT ===
 def get_recent_memories_for_prompt(user_id, limit=3):
@@ -79,3 +76,16 @@ def get_recent_memories_for_prompt(user_id, limit=3):
     notes.sort(key=lambda x: x["time"], reverse=True)
     recent = notes[:limit]
     return "\n".join(f"- ({n['type']}) {n['content']}" for n in recent)
+
+# === XÓA GHI NHỚ THEO INDEX ===
+def delete_memory_item(user_id, index):
+    all_data = sheet.get_all_values()
+    indexes_to_delete = []
+    for idx, row in enumerate(all_data[1:], start=2):
+        if row[0] == str(user_id):
+            indexes_to_delete.append(idx)
+    if 0 <= index < len(indexes_to_delete):
+        target_row = indexes_to_delete[index]
+        sheet.delete_rows(target_row)
+        return True
+    return False
