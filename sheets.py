@@ -8,11 +8,21 @@ credentials_str = os.getenv("GOOGLE_CREDENTIALS_JSON")
 if not credentials_str:
     raise RuntimeError("❌ Biến môi trường GOOGLE_CREDENTIALS_JSON chưa được thiết lập!")
 
-credentials_data = json.loads(credentials_str)
-gc = gspread.service_account_from_dict(credentials_data)
+try:
+    # Thử parse JSON trực tiếp
+    credentials_data = json.loads(credentials_str)
+except json.JSONDecodeError:
+    try:
+        # Nếu lỗi, thử giải mã escape (trường hợp Zeabur lưu escaped)
+        fixed_str = credentials_str.encode().decode("unicode_escape")
+        credentials_data = json.loads(fixed_str)
+    except Exception as e:
+        raise RuntimeError(f"❌ Lỗi JSON trong GOOGLE_CREDENTIALS_JSON: {e}")
 
-SHEET_NAME = "memorysheet"  # Đặt tên Google Sheet đúng
-worksheet = gc.open(SHEET_NAME).sheet1  # Trang đầu tiên
+# Tạo kết nối Google Sheets
+gc = gspread.service_account_from_dict(credentials_data)
+SHEET_NAME = "memorysheet"
+worksheet = gc.open(SHEET_NAME).sheet1
 
 # === GHI NHỚ ===
 def save_memory(user_id, content, note_type="khác"):
@@ -30,12 +40,9 @@ def get_memory(user_id, note_type=None):
 # === TÌM KIẾM ===
 def search_memory(user_id, keyword):
     notes = get_memory(user_id)
-    result = []
     keyword_lower = keyword.lower()
-    for idx, note in enumerate(notes):
-        if keyword_lower in note["content"].lower() or keyword_lower in note["type"].lower():
-            result.append((idx, note))
-    return result
+    return [(i, note) for i, note in enumerate(notes) 
+            if keyword_lower in note["content"].lower() or keyword_lower in note["type"].lower()]
 
 # === XÓA TẤT CẢ GHI NHỚ CỦA USER ===
 def clear_memory(user_id):
@@ -53,7 +60,7 @@ def delete_memory_item(user_id, index):
         target = user_notes[index]
         all_rows = worksheet.get_all_values()
         for i, row in enumerate(all_rows[1:], start=2):
-            if (row[0] == str(user_id) and row[1] == target["content"] 
+            if (row[0] == str(user_id) and row[1] == target["content"]
                 and row[2] == target["type"] and row[3] == target["time"]):
                 worksheet.delete_rows(i)
                 return True
@@ -68,9 +75,9 @@ def update_latest_memory_type(user_id, note_type):
     latest = user_notes[-1]
     all_rows = worksheet.get_all_values()
     for i, row in enumerate(all_rows[1:], start=2):
-        if (row[0] == str(user_id) and row[1] == latest["content"] 
+        if (row[0] == str(user_id) and row[1] == latest["content"]
             and row[2] == latest["type"] and row[3] == latest["time"]):
-            worksheet.update_cell(i, 3, note_type)  # Cột 3 = type
+            worksheet.update_cell(i, 3, note_type)
             return True
     return False
 
