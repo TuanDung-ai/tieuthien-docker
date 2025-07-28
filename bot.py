@@ -11,12 +11,13 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, Cal
 # === TOKEN và API KEY ===
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY")
+ZEABUR_MEMORY_API = os.getenv("ZEABUR_MEMORY_API")  # URL API ghi nhớ từ Zeabur
 
 # === FILE LƯU NHỚ ===
 MEMORY_FILE = "memory.json"
 user_states = {}  # user_id → trạng thái hoặc dict khi tìm kiếm
 
-# === HÀM GHI NHỚ PHÂN LOẠI ===
+# === GHI NHỚ LÊN GOOGLE SHEETS ===
 def save_memory(user_id, content, note_type="khác"):
     data = {}
     if os.path.exists(MEMORY_FILE):
@@ -41,6 +42,19 @@ def save_memory(user_id, content, note_type="khác"):
 
     with open(MEMORY_FILE, "w") as f:
         json.dump(data, f, indent=2)
+
+    # Ghi thêm vào Google Sheets
+    try:
+        if ZEABUR_MEMORY_API:
+            payload = {
+                "chu_de": note_type,
+                "noi_dung": content,
+                "ghi_chu": f"From Telegram user {user_id}"
+            }
+            res = requests.post(f"{ZEABUR_MEMORY_API}/ghi_nho", json=payload, timeout=10)
+            print("Ghi nhớ cloud:", res.status_code)
+    except Exception as e:
+        print("Lỗi ghi nhớ cloud:", e)
 
 # === LẤY GHI NHỚ (lọc loại nếu cần) ===
 def get_memory(user_id, note_type=None):
