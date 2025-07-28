@@ -3,6 +3,11 @@ import json
 import gspread
 from datetime import datetime
 
+print("=== ENVIRONMENT VARIABLES ===")
+for k, v in os.environ.items():
+    print(f"{k} = {v[:100]}...")  # In 100 ký tự đầu tiên để tránh lộ khóa
+print("=============================")
+
 # === KẾT NỐI GOOGLE SHEETS ===
 credentials_str = os.getenv("GOOGLE_CREDENTIALS_JSON")
 if not credentials_str:
