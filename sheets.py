@@ -1,10 +1,18 @@
+import os
+import json
 import gspread
 from datetime import datetime
 
-# Kết nối Google Sheets
-gc = gspread.service_account(filename="credentials.json")
-SHEET_NAME = "memorysheet"
-worksheet = gc.open(SHEET_NAME).sheet1  # Lấy trang đầu tiên
+# === KẾT NỐI GOOGLE SHEETS ===
+credentials_str = os.getenv("GOOGLE_CREDENTIALS_JSON")
+if not credentials_str:
+    raise RuntimeError("❌ Biến môi trường GOOGLE_CREDENTIALS_JSON chưa được thiết lập!")
+
+credentials_data = json.loads(credentials_str)
+gc = gspread.service_account_from_dict(credentials_data)
+
+SHEET_NAME = "memorysheet"  # Đặt tên Google Sheet đúng
+worksheet = gc.open(SHEET_NAME).sheet1  # Trang đầu tiên
 
 # === GHI NHỚ ===
 def save_memory(user_id, content, note_type="khác"):
