@@ -4,45 +4,29 @@ import requests
 from datetime import datetime
 from flask import Flask
 import threading
-import logging
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
-# === CẤU HÌNH LOG ===
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 # === TOKEN và API KEY ===
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY")
-ZEABUR_MEMORY_API = os.getenv("ZEABUR_MEMORY_API")
 
 # === FILE LƯU NHỚ ===
 MEMORY_FILE = "memory.json"
 user_states = {}  # user_id → trạng thái hoặc dict khi tìm kiếm
 
-# === HÀM XỬ LÝ FILE GHI NHỚ ===
-def load_memory():
-    if not os.path.exists(MEMORY_FILE):
-        return {}
-    try:
-        with open(MEMORY_FILE, "r") as f:
-            return json.load(f)
-    except Exception as e:
-        logger.error("Lỗi đọc file ghi nhớ:", exc_info=True)
-        return {}
-
-def save_memory_to_file(data):
-    try:
-        with open(MEMORY_FILE, "w") as f:
-            json.dump(data, f, indent=2)
-    except Exception as e:
-        logger.error("Lỗi ghi file ghi nhớ:", exc_info=True)
-
-# === GHI NHỚ LÊN GOOGLE SHEETS ===
+# === HÀM GHI NHỚ PHÂN LOẠI ===
 def save_memory(user_id, content, note_type="khác"):
-    data = load_memory()
+    data = {}
+    if os.path.exists(MEMORY_FILE):
+        try:
+            with open(MEMORY_FILE, "r") as f:
+                data = json.load(f)
+        except Exception as e:
+            print("Lỗi đọc file ghi nhớ:", e)
+            data = {}
+
     user_key = str(user_id)
     if user_key not in data:
         data[user_key] = []
@@ -54,29 +38,24 @@ def save_memory(user_id, content, note_type="khác"):
     }
 
     data[user_key].append(memory_item)
-    save_memory_to_file(data)
 
-    # Ghi thêm vào Google Sheets
-    if ZEABUR_MEMORY_API:
-        try:
-            payload = {
-                "chu_de": note_type,
-                "noi_dung": content,
-                "ghi_chu": f"From Telegram user {user_id}"
-            }
-            res = requests.post(f"{ZEABUR_MEMORY_API}/ghi_nho", json=payload, timeout=10)
-            res.raise_for_status()
-            logger.info("Ghi nhớ cloud thành công: %s", res.status_code)
-        except Exception as e:
-            logger.error("Lỗi ghi nhớ cloud:", exc_info=True)
+    with open(MEMORY_FILE, "w") as f:
+        json.dump(data, f, indent=2)
 
-# === LẤY GHI NHỚ ===
+# === LẤY GHI NHỚ (lọc loại nếu cần) ===
 def get_memory(user_id, note_type=None):
-    data = load_memory()
-    all_notes = data.get(str(user_id), [])
-    if note_type:
-        return [note for note in all_notes if note["type"] == note_type]
-    return all_notes
+    if not os.path.exists(MEMORY_FILE):
+        return []
+    try:
+        with open(MEMORY_FILE, "r") as f:
+            data = json.load(f)
+        all_notes = data.get(str(user_id), [])
+        if note_type:
+            return [note for note in all_notes if note["type"] == note_type]
+        return all_notes
+    except Exception as e:
+        print("Lỗi đọc file ghi nhớ:", e)
+        return []
 
 # === TÌM KIẾM GHI NHỚ ===
 def search_memory(user_id, keyword):
@@ -90,33 +69,56 @@ def search_memory(user_id, keyword):
 
 # === XÓA GHI NHỚ ===
 def clear_memory(user_id):
-    data = load_memory()
+    if not os.path.exists(MEMORY_FILE):
+        return False
+    try:
+        with open(MEMORY_FILE, "r") as f:
+            data = json.load(f)
+    except Exception as e:
+        print("Lỗi đọc file ghi nhớ:", e)
+        return False
     user_key = str(user_id)
     if user_key in data:
         del data[user_key]
-        save_memory_to_file(data)
+        with open(MEMORY_FILE, "w") as f:
+            json.dump(data, f, indent=2)
         return True
     return False
 
 def delete_memory_item(user_id, index):
-    data = load_memory()
+    if not os.path.exists(MEMORY_FILE):
+        return False
+    try:
+        with open(MEMORY_FILE, "r") as f:
+            data = json.load(f)
+    except Exception as e:
+        print("Lỗi đọc file ghi nhớ:", e)
+        return False
     user_key = str(user_id)
     if user_key in data and 0 <= index < len(data[user_key]):
         del data[user_key][index]
         if not data[user_key]:
             del data[user_key]
-        save_memory_to_file(data)
+        with open(MEMORY_FILE, "w") as f:
+            json.dump(data, f, indent=2)
         return True
     return False
 
-# === CẬP NHẬT PHÂN LOẠI ===
+# === CẬP NHẬT PHÂN LOẠI CHO GHI NHỚ MỚI NHẤT ===
 def update_latest_memory_type(user_id, note_type):
-    data = load_memory()
-    user_key = str(user_id)
-    if user_key in data and data[user_key]:
-        data[user_key][-1]["type"] = note_type
-        save_memory_to_file(data)
-        return True
+    if not os.path.exists(MEMORY_FILE):
+        return False
+    try:
+        with open(MEMORY_FILE, "r") as f:
+            data = json.load(f)
+        user_key = str(user_id)
+        if user_key in data and data[user_key]:
+            data[user_key][-1]["type"] = note_type
+            with open(MEMORY_FILE, "w") as f:
+                json.dump(data, f, indent=2)
+            return True
+    except Exception as e:
+        print("Lỗi cập nhật loại ghi nhớ:", e)
     return False
 
 # === TRA CỨU GHI NHỚ GẦN NHẤT ===
@@ -135,7 +137,7 @@ def format_ai_response(text):
     footer = "\n\n💡 Bạn cần gì tiếp theo? Ví dụ: '📝 Ghi nhớ', '📅 Lịch', '🎧 Thư giãn'."
     return f"🤖 Thiên Cơ:\n\n{short_text}{footer}"
 
-# === PHẢN HỒI AI ===
+# === PHẢN HỒI AI (có chèn ghi nhớ) ===
 def get_ai_response(user_prompt, user_id=None):
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
@@ -150,8 +152,17 @@ def get_ai_response(user_prompt, user_id=None):
             memory_context = f"Người dùng trước đó đã ghi nhớ:\n{mems}\n\n"
 
     messages = [
-        {"role": "system", "content": "Bạn là Thiên Cơ – AI trợ lý cá nhân đáng tin cậy. Luôn trả lời trầm ổn, chính xác, tối đa 3 câu, có thể sử dụng dữ kiện cũ."},
-        {"role": "user", "content": memory_context + user_prompt}
+        {
+            "role": "system",
+            "content": (
+                "Bạn là Thiên Cơ – AI trợ lý cá nhân đáng tin cậy. "
+                "Luôn trả lời trầm ổn, chính xác, tối đa 3 câu, có thể sử dụng dữ kiện cũ."
+            )
+        },
+        {
+            "role": "user",
+            "content": memory_context + user_prompt
+        }
     ]
 
     payload = {
@@ -163,12 +174,11 @@ def get_ai_response(user_prompt, user_id=None):
 
     try:
         response = requests.post(url, headers=headers, json=payload)
-        response.raise_for_status()
         data = response.json()
         raw_text = data["choices"][0]["message"]["content"]
         return format_ai_response(raw_text)
     except Exception as e:
-        logger.error("Lỗi AI:", exc_info=True)
+        print("Lỗi AI:", e)
         return "⚠️ Thiên Cơ gặp trục trặc nhẹ... thử lại sau nhé."
 
 # === GIAO DIỆN NÚT ===
@@ -198,6 +208,7 @@ def get_note_type_keyboard():
     ])
 
 # === HANDLER LỆNH ===
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prompt = "Chào người dùng, bạn muốn Thiên Cơ giúp gì hôm nay?"
     ai_reply = get_ai_response(prompt, user_id=update.message.from_user.id)
@@ -359,7 +370,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("⚠️ Không thể cập nhật loại ghi nhớ.")
         user_states[user_id] = None
 
-# === FLASK SERVER ===
+# === FLASK SERVER CHO UPTIMEROBOT ===
 web_app = Flask(__name__)
 
 @web_app.route('/')
@@ -367,13 +378,19 @@ web_app = Flask(__name__)
 def health_check():
     return "✅ Tiểu Thiên đang vận hành bình thường."
 
-async def run_web_app():
+def run_web_app():
     web_app.run(host="0.0.0.0", port=8080)
 
-# === KHỞI CHẠY BOT ===
+# === KHỞI CHẠY BOT & FLASK SONG SONG ===
 if __name__ == '__main__':
-    threading.Thread(target=web_app.run, kwargs={"host": "0.0.0.0", "port": 8080}).start()
+    threading.Thread(target=run_web_app).start()
     app = ApplicationBuilder().token(TOKEN).build()
-    # Thêm handler...
-    logger.info("🤖 Bot Thiên Cơ đã hồi sinh và vận hành...")
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("xem_ghi_nho", xem_ghi_nho))
+    app.add_handler(CommandHandler("xoa_ghi_nho_all", xoa_ghi_nho_all))
+    app.add_handler(CommandHandler("tim_ghi_nho", tim_ghi_nho))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(CallbackQueryHandler(button_callback))
+    print("🤖 Bot Thiên Cơ đã hồi sinh và vận hành...")
     app.run_polling()
