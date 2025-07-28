@@ -112,7 +112,11 @@ async def xem_ghi_nho(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not notes:
         await update.message.reply_text("📭 Bạn chưa có ghi nhớ nào.")
         return
-    lines = [f"{i+1}. ({n['type']}) {n['content']}" for i, n in enumerate(notes[-10:])]
+    lines = []
+    for i, n in enumerate(notes[-10:]):
+        note_type = n.get("type", "khác")
+        content = n.get("content", "")
+        lines.append(f"{i+1}. ({note_type}) {content}")
     await update.message.reply_text("\n".join(lines))
 
 async def xoa_ghi_nho_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -132,7 +136,11 @@ async def tim_ghi_nho(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not results:
         await update.message.reply_text("🔍 Không tìm thấy ghi nhớ phù hợp.")
         return
-    lines = [f"{i+1}. ({n['type']}) {n['content']}" for i, (_, n) in enumerate(results[:10])]
+    lines = []
+    for i, (_, n) in enumerate(results[:10]):
+        note_type = n.get("type", "khác")
+        content = n.get("content", "")
+        lines.append(f"{i+1}. ({note_type}) {content}")
     await update.message.reply_text("\n".join(lines))
 
 # === NHẬN TIN NHẮN ===
@@ -161,7 +169,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == 'note':
         await query.edit_message_text("📝 Chọn loại ghi nhớ:", reply_markup=get_note_type_keyboard())
     elif data.startswith("type_"):
-        note_type = data.split("_")[1]
+        note_type = data.split("_", 1)[1]
         user_states[user_id] = {"awaiting_note": True, "type": note_type}
         await query.edit_message_text(f"✍️ Gõ nội dung để ghi nhớ dạng '{note_type}':")
     elif data == 'view':
@@ -169,7 +177,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not notes:
             await query.edit_message_text("📭 Bạn chưa có ghi nhớ nào.")
         else:
-            lines = [f"{i+1}. ({n['type']}) {n['content']}" for i, n in enumerate(notes[-10:])]
+            lines = []
+            for i, n in enumerate(notes[-10:]):
+                note_type = n.get("type", "khác")
+                content = n.get("content", "")
+                lines.append(f"{i+1}. ({note_type}) {content}")
             await query.edit_message_text("\n".join(lines))
     elif data == 'clear_all':
         cleared = clear_memory(user_id)
