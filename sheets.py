@@ -1,11 +1,13 @@
 import os
 import json
+import time
 import gspread
 from datetime import datetime
+from gspread.exceptions import APIError
 
 print("=== ENVIRONMENT VARIABLES ===")
 for k, v in os.environ.items():
-    print(f"{k} = {v[:100]}...")  # In 100 ký tự đầu tiên để tránh lộ khóa
+    print(f"{k} = {v[:100]}...")
 print("=============================")
 
 # === KẾT NỐI GOOGLE SHEETS ===
@@ -14,11 +16,9 @@ if not credentials_str:
     raise RuntimeError("❌ Biến môi trường GOOGLE_CREDENTIALS_JSON chưa được thiết lập!")
 
 try:
-    # Thử parse JSON trực tiếp
     credentials_data = json.loads(credentials_str)
 except json.JSONDecodeError:
     try:
-        # Nếu lỗi, thử giải mã escape (trường hợp Zeabur lưu escaped)
         fixed_str = credentials_str.encode().decode("unicode_escape")
         credentials_data = json.loads(fixed_str)
     except Exception as e:
@@ -35,12 +35,21 @@ def save_memory(user_id, content, note_type="khác"):
     worksheet.append_row([str(user_id), content, note_type, time_str])
 
 # === LẤY GHI NHỚ ===
-def get_memory(user_id, note_type=None):
-    records = worksheet.get_all_records()
-    user_notes = [r for r in records if str(r.get("user_id")) == str(user_id)]
-    if note_type:
-        user_notes = [r for r in user_notes if r.get("type") == note_type]
-    return user_notes
+def get_memory(user_id, note_type=None, retries=3):
+    for attempt in range(retries):
+        try:
+            records = worksheet.get_all_records()
+            user_notes = [r for r in records if str(r.get("user_id", "")) == str(user_id)]
+            if note_type:
+                user_notes = [r for r in user_notes if r.get("type") == note_type]
+            return user_notes
+        except APIError as e:
+            if '503' in str(e) and attempt < retries - 1:
+                print(f"Google Sheets 503 – thử lại lần {attempt + 1}")
+                time.sleep(1.5)
+            else:
+                print("Lỗi nghiêm trọng khi kết nối Sheets:", e)
+                return []
 
 # === TÌM KIẾM ===
 def search_memory(user_id, keyword):
@@ -49,7 +58,7 @@ def search_memory(user_id, keyword):
     return [(i, note) for i, note in enumerate(notes)
             if keyword_lower in note.get("content", "").lower() or keyword_lower in note.get("type", "").lower()]
 
-# === XÓA TẤT CẢ GHI NHỚ CỦA USER ===
+# === XÓA TẤT CẢ GHI NHỚ ===
 def clear_memory(user_id):
     all_rows = worksheet.get_all_values()
     indices_to_delete = [i for i, row in enumerate(all_rows[1:], start=2) if row[0] == str(user_id)]
@@ -57,16 +66,16 @@ def clear_memory(user_id):
         worksheet.delete_rows(i)
     return bool(indices_to_delete)
 
-# === XÓA MỘT GHI NHỚ THEO INDEX ===
+# === XÓA 1 GHI NHỚ ===
 def delete_memory_item(user_id, index):
     records = worksheet.get_all_records()
-    user_notes = [r for r in records if str(r.get("user_id")) == str(user_id)]
+    user_notes = [r for r in records if str(r.get("user_id", "")) == str(user_id)]
     if 0 <= index < len(user_notes):
         target = user_notes[index]
         all_rows = worksheet.get_all_values()
         for i, row in enumerate(all_rows[1:], start=2):
-            if (row[0] == str(user_id) and row[1] == target.get("content")
-                and row[2] == target.get("type") and row[3] == target.get("time")):
+            if (row[0] == str(user_id) and row[1] == target["content"]
+                and row[2] == target["type"] and row[3] == target["time"]):
                 worksheet.delete_rows(i)
                 return True
     return False
@@ -74,32 +83,21 @@ def delete_memory_item(user_id, index):
 # === CẬP NHẬT LOẠI GHI NHỚ GẦN NHẤT ===
 def update_latest_memory_type(user_id, note_type):
     records = worksheet.get_all_records()
-    user_notes = [r for r in records if str(r.get("user_id")) == str(user_id)]
+    user_notes = [r for r in records if str(r.get("user_id", "")) == str(user_id)]
     if not user_notes:
         return False
     latest = user_notes[-1]
     all_rows = worksheet.get_all_values()
     for i, row in enumerate(all_rows[1:], start=2):
-        if (row[0] == str(user_id) and row[1] == latest.get("content")
-            and row[2] == latest.get("type") and row[3] == latest.get("time")):
+        if (row[0] == str(user_id) and row[1] == latest["content"]
+            and row[2] == latest["type"] and row[3] == latest["time"]):
             worksheet.update_cell(i, 3, note_type)
             return True
     return False
 
-# === GHI NHỚ GẦN NHẤT (CHO PROMPT AI) ===
+# === GHI NHỚ GẦN NHẤT CHO AI ===
 def get_recent_memories_for_prompt(user_id, limit=3):
     notes = get_memory(user_id)
-    if not notes:
-        return "Chưa có ghi nhớ nào."
-
     notes.sort(key=lambda x: x.get("time", ""), reverse=True)
     recent = notes[:limit]
-
-    formatted = []
-    for n in recent:
-        try:
-            formatted.append(f"- ({n['type']}) {n['content']}")
-        except KeyError:
-            print("⚠️ Ghi nhớ thiếu trường 'type' hoặc 'content':", n)
-            continue
-    return "\n".join(formatted) if formatted else "Chưa có ghi nhớ nào hợp lệ."
+    return "\n".join(f"- ({n.get('type', 'khác')}) {n.get('content', '')}" for n in recent)
