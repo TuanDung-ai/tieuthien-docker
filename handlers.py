@@ -11,7 +11,7 @@ from sheets import (
 
 # === API KEY OpenRouter ===
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY")
-user_states = {}  # user_id -> trạng thái hoặc dict
+user_states = {}  # user_id → trạng thái (ghi nhớ)
 
 # === GIAO DIỆN NÚT ===
 def get_main_keyboard():
@@ -45,7 +45,7 @@ def format_ai_response(text):
     short_text = " ".join(line.strip() for line in lines if line.strip())
     if len(short_text) > 500:
         short_text = short_text[:497] + "..."
-    footer = "\n\n💡 Bạn cần gì tiếp theo? Ví dụ: '\ud83d\udcdd Ghi nhớ', '\ud83d\udcc5 Lịch', '\ud83c\udf37 Thư giãn'."
+    footer = "\n\n💡 Bạn cần gì tiếp theo? Ví dụ: '📝 Ghi nhớ', '📅 Lịch', '🌷 Thư giãn'."
     return f"😎 Thiên Cơ:\n\n{short_text}{footer}"
 
 def get_ai_response(user_prompt, user_id=None):
@@ -87,7 +87,7 @@ def get_ai_response(user_prompt, user_id=None):
         print("Lỗi AI:", e)
         return "⚠️ Thiên Cơ gặp trục trặc nhẹ... thử lại sau nhé."
 
-# === HANDLERS ===
+# === LỆNH CƠ BẢN ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prompt = "Chào người dùng, bạn muốn Thiên Cơ giúp gì hôm nay?"
     ai_reply = get_ai_response(prompt, user_id=update.message.from_user.id)
@@ -106,12 +106,13 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(msg)
 
+# === XỬ LÝ GHI NHỚ ===
 async def xem_ghi_nho(update: Update, context: ContextTypes.DEFAULT_TYPE):
     notes = get_memory(update.message.from_user.id)
     if not notes:
-        await update.message.reply_text("📝 Chưa có ghi nhớ nào cả.")
+        await update.message.reply_text("📭 Bạn chưa có ghi nhớ nào.")
         return
-    lines = [f"{i+1}. ({n['type']}) {n['content']}" for i, n in enumerate(notes)]
+    lines = [f"{i+1}. ({n['type']}) {n['content']}" for i, n in enumerate(notes[-10:])]
     await update.message.reply_text("\n".join(lines))
 
 async def xoa_ghi_nho_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -131,42 +132,55 @@ async def tim_ghi_nho(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not results:
         await update.message.reply_text("🔍 Không tìm thấy ghi nhớ phù hợp.")
         return
-    lines = [f"{i+1}. ({n['type']}) {n['content']}" for i, (_, n) in enumerate(results)]
+    lines = [f"{i+1}. ({n['type']}) {n['content']}" for i, (_, n) in enumerate(results[:10])]
     await update.message.reply_text("\n".join(lines))
 
+# === NHẬN TIN NHẮN ===
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_input = update.message.text
-    ai_reply = get_ai_response(user_input, user_id=update.message.from_user.id)
-    await update.message.reply_text(ai_reply, reply_markup=get_main_keyboard())
+    user_id = update.message.from_user.id
+    text = update.message.text.strip()
+    state = user_states.get(user_id, {})
 
+    # Đang chờ ghi nhớ
+    if state.get("awaiting_note"):
+        note_type = state.get("type", "khác")
+        save_memory(user_id, text, note_type)
+        await update.message.reply_text(f"✅ Đã lưu ghi nhớ dạng '{note_type}'.", reply_markup=get_main_keyboard())
+        user_states.pop(user_id, None)
+    else:
+        ai_reply = get_ai_response(text, user_id=user_id)
+        await update.message.reply_text(ai_reply, reply_markup=get_main_keyboard())
+
+# === XỬ LÝ NÚT ===
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
     await query.answer()
     data = query.data
+
     if data == 'note':
-        await query.edit_message_text("Chọn loại ghi nhớ:", reply_markup=get_note_type_keyboard())
+        await query.edit_message_text("📝 Chọn loại ghi nhớ:", reply_markup=get_note_type_keyboard())
     elif data.startswith("type_"):
         note_type = data.split("_")[1]
         user_states[user_id] = {"awaiting_note": True, "type": note_type}
-        await query.edit_message_text(f"Gõ nội dung để ghi nhớ dạng {note_type}:")
+        await query.edit_message_text(f"✍️ Gõ nội dung để ghi nhớ dạng '{note_type}':")
     elif data == 'view':
         notes = get_memory(user_id)
         if not notes:
-            await query.edit_message_text("📝 Chưa có ghi nhớ nào cả.")
+            await query.edit_message_text("📭 Bạn chưa có ghi nhớ nào.")
         else:
-            lines = [f"{i+1}. ({n['type']}) {n['content']}" for i, n in enumerate(notes)]
+            lines = [f"{i+1}. ({n['type']}) {n['content']}" for i, n in enumerate(notes[-10:])]
             await query.edit_message_text("\n".join(lines))
     elif data == 'clear_all':
         cleared = clear_memory(user_id)
         if cleared:
             await query.edit_message_text("🗑️ Đã xóa toàn bộ ghi nhớ.")
         else:
-            await query.edit_message_text("⚠️ Không có ghi nhớ nào để xóa.")
+            await query.edit_message_text("⚠️ Không có gì để xóa.")
     else:
-        await query.edit_message_text("⚠️ Lệnh chưa hỗ trợ.")
+        await query.edit_message_text("⚠️ Chức năng chưa khả dụng.")
 
-# === ĐĂNG KÝ HANDLER ===
+# === ĐĂNG KÝ HANDLERS ===
 def register_handlers(app: Application):
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
