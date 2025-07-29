@@ -99,25 +99,28 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Lệnh khả dụng:\n"
         "/start – Bắt đầu trò chuyện\n"
         "/help – Danh sách lệnh\n"
-        "/xem_ghi_nho – Xem lại ký ức\n"
+        "/xem_ghi_nho – Xem lại ký ức (chọn để xóa)\n"
         "/xoa_ghi_nho_all – Xóa toàn bộ ghi nhớ\n"
         "/tim_ghi_nho <từ khóa> – Tìm ghi nhớ\n"
         "(Hoặc chat bất kỳ để trò chuyện cùng Thiên Cơ)"
     )
     await update.message.reply_text(msg)
 
-# === XỬ LÝ GHI NHỚ ===
+# === XỬ LÝ GHI NHỚ – có chọn xóa từng mục ===
 async def xem_ghi_nho(update: Update, context: ContextTypes.DEFAULT_TYPE):
     notes = get_memory(update.message.from_user.id)
     if not notes:
         await update.message.reply_text("📭 Bạn chưa có ghi nhớ nào.")
         return
-    lines = []
-    for i, n in enumerate(notes[-10:]):
+    for i, n in enumerate(notes[-10:]):  # hiển thị 10 ghi nhớ gần nhất
         note_type = n.get("type", "khác")
         content = n.get("content", "")
-        lines.append(f"{i+1}. ({note_type}) {content}")
-    await update.message.reply_text("\n".join(lines))
+        text = f"{i+1}. ({note_type}) {content}"
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton("❌ Xóa", callback_data=f"delete_{i}"),
+            InlineKeyboardButton("👁️ Xem", callback_data=f"view_{i}")
+        ]])
+        await update.message.reply_text(text, reply_markup=keyboard)
 
 async def xoa_ghi_nho_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cleared = clear_memory(update.message.from_user.id)
@@ -148,8 +151,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     text = update.message.text.strip()
     state = user_states.get(user_id, {})
-
-    # Đang chờ ghi nhớ
     if state.get("awaiting_note"):
         note_type = state.get("type", "khác")
         save_memory(user_id, text, note_type)
@@ -159,7 +160,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ai_reply = get_ai_response(text, user_id=user_id)
         await update.message.reply_text(ai_reply, reply_markup=get_main_keyboard())
 
-# === XỬ LÝ NÚT ===
+# === XỬ LÝ NÚT BẤM ===
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
@@ -173,22 +174,26 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_states[user_id] = {"awaiting_note": True, "type": note_type}
         await query.edit_message_text(f"✍️ Gõ nội dung để ghi nhớ dạng '{note_type}':")
     elif data == 'view':
-        notes = get_memory(user_id)
-        if not notes:
-            await query.edit_message_text("📭 Bạn chưa có ghi nhớ nào.")
-        else:
-            lines = []
-            for i, n in enumerate(notes[-10:]):
-                note_type = n.get("type", "khác")
-                content = n.get("content", "")
-                lines.append(f"{i+1}. ({note_type}) {content}")
-            await query.edit_message_text("\n".join(lines))
+        await xem_ghi_nho(query, context)  # dùng lại xem_ghi_nho
     elif data == 'clear_all':
         cleared = clear_memory(user_id)
-        if cleared:
-            await query.edit_message_text("🗑️ Đã xóa toàn bộ ghi nhớ.")
+        msg = "🗑️ Đã xóa toàn bộ ghi nhớ." if cleared else "⚠️ Không có gì để xóa."
+        await query.edit_message_text(msg)
+    elif data.startswith("delete_"):
+        index = int(data.split("_")[1])
+        deleted = delete_memory_item(user_id, index)
+        if deleted:
+            await query.edit_message_text("🗑️ Ghi nhớ đã được xóa.")
         else:
-            await query.edit_message_text("⚠️ Không có gì để xóa.")
+            await query.edit_message_text("⚠️ Không thể xóa ghi nhớ này.")
+    elif data.startswith("view_"):
+        index = int(data.split("_")[1])
+        notes = get_memory(user_id)
+        if index < len(notes):
+            note = notes[index]
+            await query.edit_message_text(f"👁️ ({note.get('type', 'khác')}) {note.get('content', '')}")
+        else:
+            await query.edit_message_text("⚠️ Không tìm thấy ghi nhớ.")
     else:
         await query.edit_message_text("⚠️ Chức năng chưa khả dụng.")
 
