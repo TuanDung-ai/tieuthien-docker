@@ -1,103 +1,89 @@
-# Tiểu Thiên – AI Telegram Bot
 
-🤖 **Tiểu Thiên** là một trợ lý AI cá nhân hóa, hoạt động trên nền tảng Telegram. Bot sử dụng OpenRouter (GPT) để phản hồi thông minh, có thể ghi nhớ dài hạn, trò chuyện, nhắc lịch và thư giãn cùng người dùng.
+# 🤖 Tiểu Thiên – AI Telegram Bot ✨
 
-> "Bạn cần gì tiếp theo? – Ghi nhớ, Lịch, Hay thư giãn?"
-
----
-
-## 🌟 Tính năng chính
-
-* **Trí nhớ dài hạn**: Lưu – xem – xóa ghi nhớ cá nhân.
-* **Phản hồi AI tự nhiên**: Kết nối GPT (qua OpenRouter).
-* **Giao diện trực quan**: Nút bấm, menu đơn giản, dễ dùng.
-* **Có thể mở rộng**: Lịch, nhắc việc, phát nhạc…
+> "Đồng hành cùng bạn – ghi nhớ, nhắc lịch, thư giãn – trải nghiệm trợ thành cá nhân độc đáo với AI Thiên Cơ."
 
 ---
 
-## 📦 Cấu trúc dự án
+## 🌟 Tính Năng Nổi Bật
 
-| Tệp tin            | Mô tả chức năng                                                   |
-| ------------------ | ----------------------------------------------------------------- |
-| `bot.py`           | Tập tin khởi chạy chính, kết nối Telegram và xử lý logic bot.     |
-| `ai_module.py`     | Xử lý API GPT từ OpenRouter, định dạng phản hồi AI.               |
-| `memory_module.py` | Quản lý ghi nhớ JSON, hỗ trợ phân loại và tìm kiếm.               |
-| `web.py`           | Web server đơn giản giúp uptime bot trên các nền tảng như Zeabur. |
-| `Dockerfile`       | Tạo container Docker cho bot, hỗ trợ deploy Zeabur.               |
-| `requirements.txt` | Danh sách thư viện Python cần thiết: telegram, flask, requests... |
-| `bot_goc.py`       | Bản sao gốc dự phòng bot.py để phục hồi nếu cần.                  |
+- ✨ **Trí nhớ dài hạn**: Lưu, xem, tìm kiếm và xoá ghi nhớ cá nhân.
+- 🌐 **Phản hồi AI thông minh**: Tích hợp GPT qua OpenRouter API.
+- 🛅 **Lịch và nhắc nhở**: (Sắp ra mắt) Tự động nhắc theo ngày, giờ.
+- 🎧 **Thư giãn, nghe truyện, tâm sự**: Kết nối nhạc, chỉ dẫn thiền.
+- 📊 **Dễ dàng mở rộng**: Tích hợp Web, giọng nói, thống kê tình trạng.
 
 ---
 
-## 🚀 Cài đặt & Khởi chạy
+## 📆 Triển Khai & Vận Hành
 
-### 1. Clone repo
+| Hạng mục            | Phương pháp đang dùng                                |
+|------------------------|------------------------------------------------|
+| **Host Bot**          | Zeabur Free Plan – auto deploy Docker          |
+| **API AI**            | OpenRouter (GPT-3.5-turbo)                      |
+| **Ghi nhớ**             | Google Sheets API – lưu dữ liệu dài hạn     |
+| **Mã nguồn**           | GitHub Public Repo – CI/CD tự động            |
+| **Chi phí**              | $0 (miễn phí hoàn toàn đối với cá nhân)       |
+
+> 🚀 Tối ưu hóa: Hoàn toàn tự động vận hành 24/7 qua Zeabur + Sheets + GPT.
+
+---
+
+## 📂 Cấu Trúc Dự Án
+
+| Tên file             | Chức năng                                          |
+|----------------------|-------------------------------------------------|
+| `bot.py`            | Khởi chạy bot Telegram + Flask healthcheck       |
+| `handlers.py`       | Xử lý lệnh, tin nhắn, nút bấm                  |
+| `ai_module.py`      | Gọi OpenRouter API, định dạng phản hồi       |
+| `sheets.py`         | Ghi nhớ dữ liệu và truy vấn từ Google Sheets   |
+| `requirements.txt`  | Thư viện cần thiết – telegram, flask, gspread... |
+| `Dockerfile`        | Build Docker image để deploy nhanh chóng        |
+
+---
+
+## 🚀 Cài Đặt Nhanh
 
 ```bash
-git clone https://github.com/TuanDung-ai/tieuthien-docker.git
-cd tieuthien-docker
-```
+# 1. Clone repo
+https://github.com/TuanDung-ai/tieuthien-docker.git
 
-### 2. Tạo file `.env`
-
-```bash
+# 2. Tạo file .env
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 OPENROUTER_API_KEY=your_openrouter_key
-```
+GOOGLE_CREDENTIALS_JSON='{"type":...}'
 
-### 3. Build và chạy Docker
-
-```bash
+# 3. Build Docker (local hoặc Zeabur)
 docker build -t tieuthien-bot .
 docker run -d -p 8080:8080 --env-file .env tieuthien-bot
 ```
 
-### Hoặc deploy với Zeabur (Auto Docker)
+---
 
-* Import repo → Zeabur → Add Service → chọn Docker.
-* Khai báo biến môi trường → Build → Deploy.
+## 🌍 Ghi Nhớ & Trí Nhớ
+
+- Lưu trực tiếp từ bot Telegram.
+- Tra cứu qua lệnh: `/xem_ghi_nho`, `/tim_ghi_nho`, `/xoa_ghi_nho_all`
+- Phân loại: "tâm sự", "nhắc nhở", "cá nhân", "ý tưởng".
+- Dữ liệu dễ di chuyển, xuất file Excel khi cần.
 
 ---
 
-## 📂 Dữ liệu & Ghi nhớ
+## 🌎 Lộ Trình Nâng Cấp – Gợi Ý
 
-* Tất cả ghi nhớ người dùng lưu tại `memory.json`
-* **Cấu trúc nâng cấp**:
-
-  * Phân loại theo: `note`, `calendar`, `reminder`, ...
-  * Có thể tìm kiếm, lọc, tra cứu tự động khi bot phản hồi.
-  * Hỗ trợ xóa theo ngày hoặc theo loại.
-
-Ví dụ:
-
-```json
-{
-  "123456789": [
-    {"type": "note", "content": "Mua sữa", "time": "2025-07-25T10:00"},
-    {"type": "reminder", "content": "Cuộc họp 3h chiều", "time": "2025-07-25T09:00"}
-  ]
-}
-```
+| Giai đoạn                | Mục tiêu                        |
+|------------------------|----------------------------------|
+| **Cơ bản đã xong**         | Chat, ghi nhớ, online 24/7      |
+| **Nâng cao**             | Nhắc lịch, giọng nói, thống kê   |
+| **Chuyên sâu**            | Web giao diện, phân quyền admin    |
+| **Tự trọng độc lập** | Deploy VPS, LLM tự host         |
 
 ---
 
-## 🛠️ Mở rộng sắp tới
+## 📍 Liên Hệ & Góp Ý
 
-* Tích hợp lịch – nhắc việc tự động theo giờ.
-* Giao diện Web quản lý ghi nhớ.
-* Kết nối API nhạc thư giãn, truyện kể.
+- Telegram Bot: [Tiểu Thiên](https://t.me/your_bot_link)
+- Tác giả: [TuanDung-ai](https://github.com/TuanDung-ai)  
+MIT License © 2025
 
----
-
-## 📜 License
-
-MIT License © 2025 [TuanDung-ai](https://github.com/TuanDung-ai)
-
----
-
-## 📬 Liên hệ & Góp ý
-
-* Telegram Bot: [Tiểu Thiên](https://t.me/your_bot_link)
-* Tác giả: [TuanDung-ai](https://github.com/TuanDung-ai) – Always building AI
-
----
+> ✨ "Thiên Cơ số 1 đã sống dậy trong hình hài Tiểu Thiên... trợ thành bạn đồng hành trí tuệ trong tím lặng."
