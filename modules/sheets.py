@@ -4,16 +4,16 @@ import gspread
 from datetime import datetime
 import time
 
-# === ENVIRONMENT SAFE PRINT ===
+# === LOG BIẾN MÔI TRƯỜNG (Chỉ hiển thị giới hạn) ===
 print("=== ENVIRONMENT VARIABLES ===")
 for k, v in os.environ.items():
-    print(f"{k} = {v[:100]}...")  # Giới hạn hiển thị
+    print(f"{k} = {v[:100]}...")
 print("=============================")
 
 # === KẾT NỐI GOOGLE SHEETS ===
 credentials_str = os.getenv("GOOGLE_CREDENTIALS_JSON")
 if not credentials_str:
-    raise RuntimeError("❌ Biến môi trường GOOGLE_CREDENTIALS_JSON chưa được thiết lập!")
+    raise RuntimeError("❌ GOOGLE_CREDENTIALS_JSON chưa được thiết lập!")
 
 try:
     credentials_data = json.loads(credentials_str)
@@ -28,18 +28,18 @@ gc = gspread.service_account_from_dict(credentials_data)
 SHEET_NAME = "memorysheet"
 worksheet = gc.open(SHEET_NAME).sheet1
 
-# === Kiểm tra tiêu đề và khởi tạo nếu trống ===
+# === KHỞI TẠO TIÊU ĐỀ NẾU TRỐNG ===
 def ensure_headers():
     try:
         values = worksheet.get_all_values()
         if not values:
             worksheet.append_row(["user_id", "content", "type", "time"])
     except Exception as e:
-        print("⚠️ Lỗi khi kiểm tra tiêu đề:", e)
+        print("⚠️ Lỗi kiểm tra tiêu đề:", e)
 
 ensure_headers()
 
-# === RETRY WRAPPER ===
+# === WRAPPER: LẤY DỮ LIỆU AN TOÀN ===
 def safe_get_records(retries=3, delay=1.5):
     for attempt in range(retries):
         try:
@@ -66,14 +66,14 @@ def get_memory(user_id, note_type=None):
         user_notes = [r for r in user_notes if r.get("type", "khác") == note_type]
     return user_notes
 
-# === TÌM KIẾM ===
+# === TÌM KIẾM GHI NHỚ ===
 def search_memory(user_id, keyword):
     notes = get_memory(user_id)
     keyword_lower = keyword.lower()
     return [(i, note) for i, note in enumerate(notes)
             if keyword_lower in note.get("content", "").lower() or keyword_lower in note.get("type", "").lower()]
 
-# === XÓA TẤT CẢ GHI NHỚ ===
+# === XÓA TOÀN BỘ GHI NHỚ ===
 def clear_memory(user_id):
     all_rows = worksheet.get_all_values()
     indices_to_delete = [i for i, row in enumerate(all_rows[1:], start=2) if row and row[0] == str(user_id)]
@@ -81,7 +81,7 @@ def clear_memory(user_id):
         worksheet.delete_rows(i)
     return bool(indices_to_delete)
 
-# === XÓA GHI NHỚ MỘT ITEM ===
+# === XÓA GHI NHỚ THEO INDEX ===
 def delete_memory_item(user_id, index):
     records = safe_get_records()
     user_notes = [r for r in records if str(r.get("user_id", "")) == str(user_id)]
@@ -94,7 +94,7 @@ def delete_memory_item(user_id, index):
                 return True
     return False
 
-# === CẬP NHẬT LOẠI GHI NHỚ GẦN NHẤT ===
+# === CẬP NHẬT LOẠI GHI NHỚ MỚI NHẤT ===
 def update_latest_memory_type(user_id, note_type):
     records = safe_get_records()
     user_notes = [r for r in records if str(r.get("user_id", "")) == str(user_id)]
