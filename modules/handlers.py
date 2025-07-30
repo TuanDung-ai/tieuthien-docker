@@ -1,6 +1,4 @@
 # Write the corrected handlers.py code to a file for download
-
-handlers_code = '''import os
 import requests
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
