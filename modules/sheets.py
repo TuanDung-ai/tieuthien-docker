@@ -81,19 +81,23 @@ def clear_memory(user_id):
         worksheet.delete_rows(i)
     return bool(indices_to_delete)
 
-# === XÓA GHI NHỚ THEO INDEX (FIXED) ===
+# === XÓA GHI NHỚ THEO INDEX – ĐÃ FIX ===
 def delete_memory_item(user_id, index):
-    records = safe_get_records()
-    user_notes = [r for r in records if str(r.get("user_id", "")) == str(user_id)]
-    if 0 <= index < len(user_notes):
-        all_rows = worksheet.get_all_values()
-        match_count = -1  # đếm ghi nhớ đúng user_id để tìm index-th
-        for i, row in enumerate(all_rows[1:], start=2):
-            if row and len(row) >= 4 and row[0] == str(user_id):
-                match_count += 1
-                if match_count == index:
-                    worksheet.delete_rows(i)
-                    return True
+    all_rows = worksheet.get_all_values()
+    user_note_rows = []
+    for i, row in enumerate(all_rows[1:], start=2):  # Bắt đầu từ dòng 2
+        if row and row[0] == str(user_id):
+            user_note_rows.append(i)
+
+    print(f"[DEBUG] Ghi nhớ của user {user_id}: {len(user_note_rows)} dòng, yêu cầu xóa index {index}")
+
+    if 0 <= index < len(user_note_rows):
+        row_to_delete = user_note_rows[index]
+        print(f"[DEBUG] Xóa dòng: {row_to_delete}")
+        worksheet.delete_rows(row_to_delete)
+        return True
+
+    print("[DEBUG] Không tìm thấy ghi nhớ cần xóa.")
     return False
 
 # === CẬP NHẬT LOẠI GHI NHỚ MỚI NHẤT ===
