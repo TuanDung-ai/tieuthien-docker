@@ -1,11 +1,11 @@
 import os
 import requests
+from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from modules.sheets import (
     save_memory, get_memory, search_memory,
-    clear_memory, delete_memory_item,
-    get_recent_memories_for_prompt
+    clear_memory, get_recent_memories_for_prompt
 )
 
 # === API KEY OpenRouter ===
@@ -75,7 +75,7 @@ def get_ai_response(user_prompt, user_id=None):
         "model": "openai/gpt-3.5-turbo",
         "messages": messages,
         "temperature": 0.6,
-        "max_tokens": 600
+        "max_tokens": 400
     }
     try:
         response = requests.post(url, headers=headers, json=payload)
@@ -107,9 +107,15 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # === XỬ LÝ GHI NHỚ ===
 async def xem_ghi_nho(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from modules.sheets import worksheet
     user_id = update.message.from_user.id if update.message else update.callback_query.from_user.id
-    notes = get_memory(user_id)
-    if not notes:
+    all_rows = worksheet.get_all_values()
+    user_rows = []
+    for i, row in enumerate(all_rows[1:], start=2):  # dòng 2 trở đi
+        if row and row[0] == str(user_id):
+            user_rows.append((i, row))  # (row_number, row_data)
+
+    if not user_rows:
         msg = "📭 Bạn chưa có ghi nhớ nào."
         if update.message:
             await update.message.reply_text(msg)
@@ -117,13 +123,13 @@ async def xem_ghi_nho(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.callback_query.edit_message_text(msg)
         return
 
-    for real_index, n in enumerate(notes[-10:], start=len(notes)-10):
-        note_type = n.get("type", "khác")
-        content = n.get("content", "")
+    for real_index, (row_number, row) in enumerate(user_rows[-10:]):
+        note_type = row[2] if len(row) > 2 else "khác"
+        content = row[1] if len(row) > 1 else ""
         text = f"{real_index+1}. ({note_type}) {content}"
-        keyboard = InlineKeyboardMarkup([[
-            InlineKeyboardButton("❌ Xóa", callback_data=f"delete_{real_index}"),
-            InlineKeyboardButton("👁️ Xem", callback_data=f"view_{real_index}")
+        keyboard = InlineKeyboardMarkup([[ 
+            InlineKeyboardButton("❌ Xóa", callback_data=f"delete_row_{row_number}"),
+            InlineKeyboardButton("👁️ Xem", callback_data=f"view_row_{row_number}")
         ]])
         if update.message:
             await update.message.reply_text(text, reply_markup=keyboard)
@@ -168,6 +174,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # === XỬ LÝ NÚT BẤM ===
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from modules.sheets import worksheet
     query = update.callback_query
     user_id = query.from_user.id
     await query.answer()
@@ -185,19 +192,23 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cleared = clear_memory(user_id)
         msg = "🗑️ Đã xóa toàn bộ ghi nhớ." if cleared else "⚠️ Không có gì để xóa."
         await query.edit_message_text(msg)
-    elif data.startswith("delete_") or data.startswith("view_"):
-        index = int(data.split("_")[1])
-        notes = get_memory(user_id)
-        if not notes or index < 0 or index >= len(notes):
+    elif data.startswith("delete_row_") or data.startswith("view_row_"):
+        row_number = int(data.split("_")[2])
+        all_rows = worksheet.get_all_values()
+        if row_number > len(all_rows):
             await query.edit_message_text("⚠️ Ghi nhớ này không còn tồn tại hoặc đã bị xóa.")
             return
-        if data.startswith("delete_"):
-            deleted = delete_memory_item(user_id, index)
-            msg = "🗑️ Ghi nhớ đã được xóa." if deleted else "⚠️ Không thể xóa ghi nhớ này."
-            await query.edit_message_text(msg)
+        row = all_rows[row_number - 1]
+        if row[0] != str(user_id):
+            await query.edit_message_text("⚠️ Bạn không có quyền với ghi nhớ này.")
+            return
+        if data.startswith("delete_row_"):
+            worksheet.delete_rows(row_number)
+            await query.edit_message_text("🗑️ Ghi nhớ đã được xóa.")
         else:
-            note = notes[index]
-            await query.edit_message_text(f"👁️ ({note.get('type', 'khác')}) {note.get('content', '')}")
+            note_type = row[2] if len(row) > 2 else "khác"
+            content = row[1] if len(row) > 1 else ""
+            await query.edit_message_text(f"👁️ ({note_type}) {content}")
     else:
         await query.edit_message_text("⚠️ Chức năng chưa khả dụng.")
 
