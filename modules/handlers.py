@@ -213,10 +213,4 @@ def register_handlers(app: Application):
     app.add_handler(CommandHandler("tim_ghi_nho", tim_ghi_nho))
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-'''
 
-# Save to file
-with open("/mnt/data/handlers.py", "w", encoding="utf-8") as f:
-    f.write(handlers_code)
-
-"/mnt/data/handlers.py"
