@@ -99,35 +99,42 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Lệnh khả dụng:\n"
         "/start – Bắt đầu trò chuyện\n"
         "/help – Danh sách lệnh\n"
-        "/xem_ghi_nho – Xem lại ký ức (chọn để xóa)\n"
+        "/xem_ghi_nho – Xem lại ký ức\n"
         "/xoa_ghi_nho_all – Xóa toàn bộ ghi nhớ\n"
         "/tim_ghi_nho <từ khóa> – Tìm ghi nhớ\n"
         "(Hoặc chat bất kỳ để trò chuyện cùng Thiên Cơ)"
     )
     await update.message.reply_text(msg)
 
-# === XỬ LÝ GHI NHỚ – có chọn xóa từng mục ===
+# === XỬ LÝ GHI NHỚ ===
 async def xem_ghi_nho(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    notes = get_memory(update.message.from_user.id)
+    user_id = update.message.from_user.id if update.message else update.callback_query.from_user.id
+    notes = get_memory(user_id)
     if not notes:
-        await update.message.reply_text("📭 Bạn chưa có ghi nhớ nào.")
+        msg = "📭 Bạn chưa có ghi nhớ nào."
+        if update.message:
+            await update.message.reply_text(msg)
+        else:
+            await update.callback_query.edit_message_text(msg)
         return
-    for i, n in enumerate(notes[-10:]):  # hiển thị 10 ghi nhớ gần nhất
+
+    for real_index, n in enumerate(notes[-10:], start=len(notes)-10):
         note_type = n.get("type", "khác")
         content = n.get("content", "")
-        text = f"{i+1}. ({note_type}) {content}"
+        text = f"{real_index+1}. ({note_type}) {content}"
         keyboard = InlineKeyboardMarkup([[
-            InlineKeyboardButton("❌ Xóa", callback_data=f"delete_{i}"),
-            InlineKeyboardButton("👁️ Xem", callback_data=f"view_{i}")
+            InlineKeyboardButton("❌ Xóa", callback_data=f"delete_{real_index}"),
+            InlineKeyboardButton("👁️ Xem", callback_data=f"view_{real_index}")
         ]])
-        await update.message.reply_text(text, reply_markup=keyboard)
+        if update.message:
+            await update.message.reply_text(text, reply_markup=keyboard)
+        else:
+            await update.callback_query.message.reply_text(text, reply_markup=keyboard)
 
 async def xoa_ghi_nho_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cleared = clear_memory(update.message.from_user.id)
-    if cleared:
-        await update.message.reply_text("🗑️ Đã xóa toàn bộ ghi nhớ.")
-    else:
-        await update.message.reply_text("⚠️ Không có ghi nhớ nào để xóa.")
+    msg = "🗑️ Đã xóa toàn bộ ghi nhớ." if cleared else "⚠️ Không có ghi nhớ nào để xóa."
+    await update.message.reply_text(msg)
 
 async def tim_ghi_nho(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
@@ -174,7 +181,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_states[user_id] = {"awaiting_note": True, "type": note_type}
         await query.edit_message_text(f"✍️ Gõ nội dung để ghi nhớ dạng '{note_type}':")
     elif data == 'view':
-        await xem_ghi_nho(query, context)  # dùng lại xem_ghi_nho
+        await xem_ghi_nho(update, context)
     elif data == 'clear_all':
         cleared = clear_memory(user_id)
         msg = "🗑️ Đã xóa toàn bộ ghi nhớ." if cleared else "⚠️ Không có gì để xóa."
@@ -182,10 +189,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("delete_"):
         index = int(data.split("_")[1])
         deleted = delete_memory_item(user_id, index)
-        if deleted:
-            await query.edit_message_text("🗑️ Ghi nhớ đã được xóa.")
-        else:
-            await query.edit_message_text("⚠️ Không thể xóa ghi nhớ này.")
+        msg = "🗑️ Ghi nhớ đã được xóa." if deleted else "⚠️ Không thể xóa ghi nhớ này."
+        await query.edit_message_text(msg)
     elif data.startswith("view_"):
         index = int(data.split("_")[1])
         notes = get_memory(user_id)
