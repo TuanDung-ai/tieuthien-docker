@@ -186,19 +186,19 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cleared = clear_memory(user_id)
         msg = "🗑️ Đã xóa toàn bộ ghi nhớ." if cleared else "⚠️ Không có gì để xóa."
         await query.edit_message_text(msg)
-    elif data.startswith("delete_"):
-        index = int(data.split("_")[1])
-        deleted = delete_memory_item(user_id, index)
-        msg = "🗑️ Ghi nhớ đã được xóa." if deleted else "⚠️ Không thể xóa ghi nhớ này."
-        await query.edit_message_text(msg)
-    elif data.startswith("view_"):
+    elif data.startswith("delete_") or data.startswith("view_"):
         index = int(data.split("_")[1])
         notes = get_memory(user_id)
-        if index < len(notes):
+        if index >= len(notes):
+            await query.edit_message_text("⚠️ Ghi nhớ này không còn tồn tại hoặc đã bị xóa.")
+            return
+        if data.startswith("delete_"):
+            deleted = delete_memory_item(user_id, index)
+            msg = "🗑️ Ghi nhớ đã được xóa." if deleted else "⚠️ Không thể xóa ghi nhớ này."
+            await query.edit_message_text(msg)
+        else:
             note = notes[index]
             await query.edit_message_text(f"👁️ ({note.get('type', 'khác')}) {note.get('content', '')}")
-        else:
-            await query.edit_message_text("⚠️ Không tìm thấy ghi nhớ.")
     else:
         await query.edit_message_text("⚠️ Chức năng chưa khả dụng.")
 
