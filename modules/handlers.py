@@ -188,7 +188,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("delete_") or data.startswith("view_"):
         index = int(data.split("_")[1])
         notes = get_memory(user_id)
-        if not notes or index >= len(notes):
+        if not notes or index < 0 or index >= len(notes):
             await query.edit_message_text("⚠️ Ghi nhớ này không còn tồn tại hoặc đã bị xóa.")
             return
         if data.startswith("delete_"):
