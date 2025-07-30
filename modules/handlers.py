@@ -1,12 +1,10 @@
-# Write the corrected handlers.py code to a file for download
 import os
 import requests
-from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from modules.sheets import (
     save_memory, get_memory, search_memory,
-    clear_memory, delete_memory_item, update_latest_memory_type,
+    clear_memory, delete_memory_item,
     get_recent_memories_for_prompt
 )
 
@@ -42,12 +40,12 @@ def get_note_type_keyboard():
 
 # === PHẢN HỒI AI ===
 def format_ai_response(text):
-    lines = text.strip().split('\\n')
+    lines = text.strip().split('\n')
     short_text = " ".join(line.strip() for line in lines if line.strip())
     if len(short_text) > 500:
         short_text = short_text[:497] + "..."
-    footer = "\\n\\n💡 Bạn cần gì tiếp theo? Ví dụ: '📝 Ghi nhớ', '📅 Lịch', '🌷 Thư giãn'."
-    return f"😎 Thiên Cơ:\\n\\n{short_text}{footer}"
+    footer = "\n\n💡 Bạn cần gì tiếp theo? Ví dụ: '📝 Ghi nhớ', '📅 Lịch', '🌷 Thư giãn'."
+    return f"😎 Thiên Cơ:\n\n{short_text}{footer}"
 
 def get_ai_response(user_prompt, user_id=None):
     url = "https://openrouter.ai/api/v1/chat/completions"
@@ -59,7 +57,7 @@ def get_ai_response(user_prompt, user_id=None):
     if user_id:
         mems = get_recent_memories_for_prompt(user_id)
         if mems:
-            memory_context = f"Người dùng trước đó đã ghi nhớ:\\n{mems}\\n\\n"
+            memory_context = f"Người dùng trước đó đã ghi nhớ:\n{mems}\n\n"
     messages = [
         {
             "role": "system",
@@ -77,7 +75,7 @@ def get_ai_response(user_prompt, user_id=None):
         "model": "openai/gpt-3.5-turbo",
         "messages": messages,
         "temperature": 0.6,
-        "max_tokens": 400
+        "max_tokens": 600
     }
     try:
         response = requests.post(url, headers=headers, json=payload)
@@ -96,13 +94,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
-        "🌀 Thiên Cơ lắng nghe...\\n\\n"
-        "Lệnh khả dụng:\\n"
-        "/start – Bắt đầu trò chuyện\\n"
-        "/help – Danh sách lệnh\\n"
-        "/xem_ghi_nho – Xem lại ký ức\\n"
-        "/xoa_ghi_nho_all – Xóa toàn bộ ghi nhớ\\n"
-        "/tim_ghi_nho <từ khóa> – Tìm ghi nhớ\\n"
+        "🌀 Thiên Cơ lắng nghe...\n\n"
+        "Lệnh khả dụng:\n"
+        "/start – Bắt đầu trò chuyện\n"
+        "/help – Danh sách lệnh\n"
+        "/xem_ghi_nho – Xem lại ký ức\n"
+        "/xoa_ghi_nho_all – Xóa toàn bộ ghi nhớ\n"
+        "/tim_ghi_nho <từ khóa> – Tìm ghi nhớ\n"
         "(Hoặc chat bất kỳ để trò chuyện cùng Thiên Cơ)"
     )
     await update.message.reply_text(msg)
@@ -152,7 +150,7 @@ async def tim_ghi_nho(update: Update, context: ContextTypes.DEFAULT_TYPE):
         note_type = n.get("type", "khác")
         content = n.get("content", "")
         lines.append(f"{i+1}. ({note_type}) {content}")
-    await update.message.reply_text("\\n".join(lines))
+    await update.message.reply_text("\n".join(lines))
 
 # === NHẬN TIN NHẮN ===
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -190,7 +188,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("delete_") or data.startswith("view_"):
         index = int(data.split("_")[1])
         notes = get_memory(user_id)
-        if index >= len(notes):
+        if not notes or index >= len(notes):
             await query.edit_message_text("⚠️ Ghi nhớ này không còn tồn tại hoặc đã bị xóa.")
             return
         if data.startswith("delete_"):
@@ -212,4 +210,3 @@ def register_handlers(app: Application):
     app.add_handler(CommandHandler("tim_ghi_nho", tim_ghi_nho))
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
