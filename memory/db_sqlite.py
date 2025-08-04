@@ -1,37 +1,89 @@
+# memory/db_sqlite.py
 import sqlite3
+import os
 
-DB_PATH = "memory_full.db"
+DB_FILE = "memory_full.db"
+TABLE_NAME = "memories"
 
-# Lấy toàn bộ dữ liệu từ SQLite (bảng du_an)
-def get_du_an_sqlite():
-    conn = sqlite3.connect(DB_PATH)
+def get_conn():
+    """Tạo hoặc kết nối đến database SQLite."""
+    conn = sqlite3.connect(DB_FILE)
+    return conn
+
+def init_db():
+    """Khởi tạo database và tạo bảng nếu chưa tồn tại."""
+    conn = get_conn()
     cursor = conn.cursor()
-    cursor.execute("SELECT ten, tien_do, ghi_chu, ngay_cap_nhat FROM du_an")
-    rows = cursor.fetchall()
-    conn.close()
-    # Chuyển dữ liệu thành list dict (giống Supabase format)
-    data = []
-    for row in rows:
-        data.append({
-            "ten": row[0],
-            "tien_do": row[1],
-            "ghi_chu": row[2],
-            "ngay_cap_nhat": row[3]
-        })
-    return data
-
-# Lưu 1 bản ghi vào SQLite
-def save_du_an_sqlite(data_dict):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO du_an (ten, tien_do, ghi_chu, ngay_cap_nhat)
-        VALUES (?, ?, ?, ?)
-    ''', (
-        data_dict["ten"],
-        data_dict["tien_do"],
-        data_dict["ghi_chu"],
-        data_dict["ngay_cap_nhat"]
-    ))
+    cursor.execute(f"""
+        CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
+            user_id INTEGER NOT NULL,
+            content TEXT NOT NULL,
+            note_type TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     conn.commit()
     conn.close()
+
+def save_memory(user_id, content, note_type=None):
+    """Lưu một ghi nhớ mới vào SQLite."""
+    conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute(f"""
+        INSERT INTO {TABLE_NAME} (user_id, content, note_type)
+        VALUES (?, ?, ?)
+    """, (user_id, content, note_type))
+    conn.commit()
+    conn.close()
+
+def get_memory(user_id, note_type=None):
+    """Lấy các ghi nhớ từ SQLite dựa trên user_id và note_type."""
+    conn = get_conn()
+    cursor = conn.cursor()
+    query = f"SELECT * FROM {TABLE_NAME} WHERE user_id = ?"
+    params = [user_id]
+    
+    if note_type:
+        query += " AND note_type = ?"
+        params.append(note_type)
+    
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    conn.close()
+    
+    # Chuyển đổi dữ liệu sang format dễ dùng hơn
+    results = []
+    for row in rows:
+        results.append({
+            'user_id': row[0],
+            'content': row[1],
+            'note_type': row[2],
+            'timestamp': row[3]
+        })
+    return results
+
+def delete_memory(user_id):
+    """Xóa tất cả các ghi nhớ của một user_id."""
+    conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute(f"DELETE FROM {TABLE_NAME} WHERE user_id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+
+def get_all_local_memories():
+    """Lấy tất cả các ghi nhớ trong SQLite (dùng cho đồng bộ)."""
+    conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute(f"SELECT * FROM {TABLE_NAME}")
+    rows = cursor.fetchall()
+    conn.close()
+    
+    results = []
+    for row in rows:
+        results.append({
+            'user_id': row[0],
+            'content': row[1],
+            'note_type': row[2],
+            'timestamp': row[3]
+        })
+    return results
