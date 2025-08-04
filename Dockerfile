@@ -1,6 +1,9 @@
 # Sử dụng image Python nhẹ
 FROM python:3.10-slim
 
+# Cài đặt git để pip có thể cài supabase-py từ GitHub
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
 # Tạo thư mục làm việc trong container
 WORKDIR /app
 
