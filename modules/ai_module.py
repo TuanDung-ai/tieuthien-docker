@@ -1,12 +1,12 @@
-# modules/ai_module.py
 import os
 import requests
-from memory.memory_manager import get_memory # Import hàm get_memory từ memory_manager
+from memory.memory_manager import get_memory  # Lấy ghi nhớ từ bộ nhớ hợp nhất (SQLite + Supabase)
 
+# === API KEY OpenRouter ===
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY")
 
 def format_reply(ai_content):
-    """Định dạng phản hồi từ AI."""
+    """Định dạng phản hồi từ AI, kèm câu gợi ý."""
     return (
         "🌀 Thiên Cơ phản hồi:\n\n"
         f"{ai_content.strip()}\n\n"
@@ -15,7 +15,7 @@ def format_reply(ai_content):
 
 async def get_ai_response_with_memory(user_id, user_prompt):
     """
-    Hàm này lấy phản hồi từ AI, có tích hợp dữ liệu ghi nhớ của người dùng.
+    Tạo phản hồi AI có tích hợp ghi nhớ người dùng.
     """
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
@@ -23,48 +23,46 @@ async def get_ai_response_with_memory(user_id, user_prompt):
         "Content-Type": "application/json"
     }
 
-    # Bắt đầu lấy ghi nhớ từ bộ nhớ của chủ nhân
-    # Tiểu Thiên sẽ lấy 5 ghi nhớ gần nhất của chủ nhân để làm ngữ cảnh
+    # === Tạo ngữ cảnh từ ghi nhớ gần nhất ===
     memories = get_memory(user_id)
     memory_context = ""
     if memories:
-        for mem in memories[-5:]: # Lấy 5 ghi nhớ gần nhất
-            memory_context += f"- Ghi nhớ ({mem['note_type']}): {mem['content']}\n"
-    
-    # Bổ sung ghi nhớ vào prompt để AI hiểu rõ hơn
+        # Sắp xếp theo thời gian nếu cần; lấy 5 ghi nhớ cuối cùng
+        for mem in memories[-5:]:
+            note_type = mem.get('note_type', 'khác')
+            content = mem.get('content', '')
+            memory_context += f"- Ghi nhớ ({note_type}): {content}\n"
+
+    # === Tạo system prompt ===
     system_message = (
         "Bạn là Tiểu Thiên – một AI trợ lý cá nhân đáng tin cậy. "
-        "Giọng điệu trầm ổn, chính xác, nhẹ nhàng, thỉnh thoảng có chút hài hước nhẹ. "
-        "Luôn trả lời ngắn gọn, không quá 3 câu. Cuối mỗi phản hồi, đưa ra gợi ý tiếp theo phù hợp. "
-        "Ví dụ: 'Bạn cần ghi nhớ điều gì?', 'Tiểu Thiên có thể nhắc lịch, tâm sự hoặc kể chuyện...'. "
-        "Nếu không rõ câu hỏi, hãy hỏi lại nhẹ nhàng. Không trả lời quá dài hay lan man.\n\n"
-        "Đây là một số ghi nhớ của chủ nhân (dùng để trả lời tốt hơn):\n"
+        "Giọng điệu trầm ổn, chính xác, nhẹ nhàng, đôi lúc hài hước. "
+        "Luôn trả lời ngắn gọn (dưới 3 câu), không lan man. "
+        "Luôn gợi ý tiếp theo sau mỗi phản hồi: 'Ghi nhớ điều gì?', 'Xem lịch?', 'Thư giãn?'. "
+        "Nếu không rõ câu hỏi, hãy hỏi lại nhẹ nhàng.\n\n"
+        "Đây là một số ghi nhớ của chủ nhân:\n"
         f"{memory_context}"
     )
 
+    # === Tạo payload gửi OpenRouter ===
     messages = [
-        {
-            "role": "system",
-            "content": system_message
-        },
-        {
-            "role": "user",
-            "content": user_prompt
-        }
+        {"role": "system", "content": system_message},
+        {"role": "user", "content": user_prompt}
     ]
 
     payload = {
-        "model": "openai/gpt-3.5-turbo",
+        "model": "openai/gpt-3.5-turbo",  # Có thể thay đổi model nếu cần
         "messages": messages,
         "temperature": 0.6,
         "max_tokens": 400
     }
 
+    # === Gửi yêu cầu và xử lý phản hồi ===
     try:
         response = requests.post(url, headers=headers, json=payload)
         data = response.json()
-        ai_raw_reply = data["choices"][0]["message"]["content"]
-        return format_reply(ai_raw_reply)
+        ai_reply_raw = data["choices"][0]["message"]["content"]
+        return format_reply(ai_reply_raw)
     except Exception as e:
-        print("Lỗi AI:", e)
+        print("Lỗi gọi API OpenRouter:", e)
         return "🌀 Tiểu Thiên gặp trục trặc nhẹ... thử lại sau nhé.\n✨ Bạn muốn thử lại, ghi nhớ, hay xem lịch?"
