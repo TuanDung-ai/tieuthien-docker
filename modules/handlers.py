@@ -8,7 +8,6 @@ from memory.memory_manager import (
     save_memory, get_memory, delete_memory
 )
 from modules.ai_module import get_ai_response_with_memory
-from modules.memory_api_helper import get_memory_from_api, save_memory_to_api
 
 # === API KEY OpenRouter ===
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY")
@@ -38,7 +37,6 @@ def get_note_type_keyboard():
         ]
     ])
 
-
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_text = update.message.text
@@ -52,7 +50,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
         
     # Phản hồi AI
-    ai_reply = await get_ai_response_with_memory(user_text)
+    ai_reply = await get_ai_response_with_memory(user_id, user_text)
     await update.message.reply_text(ai_reply, reply_markup=get_main_keyboard())
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
