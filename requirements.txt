@@ -1,7 +1,6 @@
 python-telegram-bot==20.6
-requests==2.31.0
-flask==2.3.3
-gspread==5.12.0
-google-auth==2.29.0
-httpx==0.26.0
-supabase==2.17.0
+gspread
+gspread-asyncio
+supabase
+Flask
+httpx==0.25.2
