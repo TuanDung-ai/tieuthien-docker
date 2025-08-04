@@ -1,3 +1,4 @@
+# bot.py
 import os
 import threading
 from flask import Flask
@@ -8,7 +9,7 @@ TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 # === IMPORT các hàm ===
 from modules.handlers import register_handlers
-from memory.sync_on_startup import sync_supabase_to_sqlite
+from memory.sync_on_startup import ensure_sqlite_cache
 from memory.sync_to_cloud import sync_sqlite_to_supabase
 
 # === Web health check ===
@@ -28,7 +29,7 @@ if __name__ == '__main__':
 
     # === Đồng bộ Supabase → SQLite ===
     print("🔄 Đồng bộ Supabase → SQLite...")
-    sync_supabase_to_sqlite()
+    ensure_sqlite_cache()
 
     # === Đồng bộ SQLite → Supabase ===
     print("🔄 Đồng bộ SQLite → Supabase...")
