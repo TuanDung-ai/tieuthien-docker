@@ -1,7 +1,6 @@
 # memory/sync_to_cloud.py
 from .db_sqlite import get_all_local_memories
 from .db_supabase import save_memory as save_memory_cloud
-from .memory_storage import get_all_memories_storage
 
 def sync_sqlite_to_supabase():
     """
