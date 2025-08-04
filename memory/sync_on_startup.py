@@ -1,7 +1,8 @@
 import os
 import sqlite3
-from db_supabase import fetch_du_an_supabase
-from db_sqlite import save_du_an_sqlite
+from memory.db_supabase import fetch_du_an_supabase
+from memory.db_sqlite import save_du_an_sqlite
+from memory.init_db import init_sqlite_db
 
 DB_PATH = "memory_full.db"
 
@@ -36,7 +37,6 @@ def ensure_sqlite_cache():
     if is_sqlite_ready():
         print("✅ SQLite cache sẵn sàng.")
     else:
-        from init_db import init_sqlite_db
         init_sqlite_db()
         sync_sqlite_from_supabase()
 
