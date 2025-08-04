@@ -8,8 +8,8 @@ TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 # === IMPORT các hàm ===
 from modules.handlers import register_handlers
-from modules.sync_on_startup import sync_supabase_to_sqlite
-from modules.sync_to_cloud import sync_sqlite_to_supabase
+from memory.sync_on_startup import sync_supabase_to_sqlite
+from memory.sync_to_cloud import sync_sqlite_to_supabase
 
 # === Web health check ===
 web_app = Flask(__name__)
