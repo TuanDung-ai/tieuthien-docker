@@ -1,45 +1,33 @@
-import os
+# memory/sync_on_startup.py
 import sqlite3
-from memory.db_supabase import fetch_du_an_supabase
-from memory.db_sqlite import save_du_an_sqlite
-from memory.init_db import init_sqlite_db
+from .db_supabase import get_all_cloud_memories
+from .db_sqlite import save_memory, init_db
 
-DB_PATH = "memory_full.db"
-
-# Kiểm tra file SQLite có tồn tại và chứa dữ liệu không
-def is_sqlite_ready():
-    if not os.path.exists(DB_PATH):
-        return False
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM du_an")
-        count = cursor.fetchone()[0]
-        conn.close()
-        return count > 0
-    except:
-        return False
-
-# Đồng bộ lại SQLite từ Supabase (nếu mất)
-def sync_sqlite_from_supabase():
-    print("⚠️ Cache SQLite trống hoặc mất → khôi phục từ Supabase...")
-    du_an_data = fetch_du_an_supabase()
-    if not du_an_data:
-        print("❌ Supabase cũng không có dữ liệu du_an.")
-        return
-
-    for row in du_an_data:
-        save_du_an_sqlite(row)
-    print(f"✅ Khôi phục {len(du_an_data)} dòng dự án vào SQLite.")
-
-# Hàm khởi động – gọi khi bot start
 def ensure_sqlite_cache():
-    if is_sqlite_ready():
-        print("✅ SQLite cache sẵn sàng.")
-    else:
-        init_sqlite_db()
-        sync_sqlite_from_supabase()
+    """
+    Đồng bộ dữ liệu từ Supabase về SQLite khi bot khởi động.
+    """
+    print("🔄 Bắt đầu đồng bộ dữ liệu từ Supabase về SQLite...")
+    
+    # Bước 1: Khởi tạo database SQLite để đảm bảo bảng tồn tại
+    init_db()
 
-# Gọi thử nếu chạy file này trực tiếp
-if __name__ == "__main__":
-    ensure_sqlite_cache()
+    # Bước 2: Lấy tất cả dữ liệu từ Supabase
+    cloud_memories = get_all_cloud_memories()
+
+    # Bước 3: Ghi đè dữ liệu vào SQLite
+    if cloud_memories:
+        conn = sqlite3.connect("memory_full.db")
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM memories") # Xóa dữ liệu cũ để đồng bộ
+        conn.commit()
+        conn.close()
+        
+        for mem in cloud_memories:
+            try:
+                save_memory(mem['user_id'], mem['content'], mem['note_type'])
+            except KeyError as e:
+                print(f"Lỗi KeyError khi lưu dữ liệu từ Supabase: {e}. Bỏ qua dòng này.")
+        print(f"✅ Đã đồng bộ thành công {len(cloud_memories)} ghi nhớ.")
+    else:
+        print("⚠️ Không có dữ liệu để đồng bộ từ Supabase.")
