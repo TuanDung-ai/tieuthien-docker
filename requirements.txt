@@ -1,5 +1,5 @@
-# Các thư viện chính của bot
-python-telegram-bot==20.6
+ Các thư viện chính của bot
+python-telegram-bot==21.0 # Nâng cấp lên phiên bản 21.0 để tương thích với httpx mới hơn
 
 # Thư viện cho Web server (Flask)
 Flask==3.1.1
