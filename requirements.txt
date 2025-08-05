@@ -1,13 +1,12 @@
 # Các thư viện chính của bot
-python-telegram-bot==21.0 # Nâng cấp lên phiên bản 21.0 để tương thích với httpx mới hơn
+python-telegram-bot==21.0
 
 # Thư viện cho Web server (Flask)
-Flask==3.1.1
+Flask[async]==3.1.1       # Cài đặt Flask với hỗ trợ async
 
 # Thư viện cho Supabase và các dependency cần thiết
-# Cài đặt supabase trước để nó tự động kéo về httpx phiên bản tương thích
 supabase==2.10.0
-httpx==0.27.0  # Chỉ định rõ phiên bản httpx theo yêu cầu của supabase
+httpx==0.27.0
 
 # Thư viện cho Google Sheets (nếu bạn dùng gspread)
 gspread
