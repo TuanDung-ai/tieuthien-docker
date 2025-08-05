@@ -1,7 +1,7 @@
 # bot.py
 import os
 import sys
-import asyncio
+import asyncio # Vẫn cần nếu có các hàm async khác trong handlers
 from flask import Flask, request, abort
 from telegram import Update
 from telegram.ext import ApplicationBuilder, Application
@@ -85,27 +85,7 @@ try:
     sync_sqlite_to_supabase()
     print("DEBUG: Đồng bộ SQLite → Supabase hoàn tất.", file=sys.stderr)
 
-    # Thiết lập webhook một cách bất đồng bộ
-    # Cần đảm bảo rằng đây là một one-time operation và không gây blocking
-    # The safest way is to run it in a separate thread or use a background task
-    # However, for simplicity and to get logs, let's try to run it directly
-    # if an event loop is available, or create one for it.
-
-    # This part is still the most complex.
-    # Let's try to get the existing loop from the main thread (where Gunicorn imports the app)
-    # and run the async task.
-    try:
-        # Attempt to get the current running event loop
-        loop = asyncio.get_event_loop()
-        # If a loop exists, run the async setup in it
-        loop.run_until_complete(setup_telegram_webhook_only())
-    except RuntimeError:
-        # If no loop is running (e.g., in some Gunicorn worker types), create a new one
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(setup_telegram_webhook_only())
-        loop.close() # Close the loop if we created it
-
+    # KHÔNG CÒN GỌI setup_telegram_webhook_only() Ở ĐÂY NỮA
     print("DEBUG: Ứng dụng đã sẵn sàng. Gunicorn sẽ khởi chạy web server.", file=sys.stderr)
 
 except Exception as e:
