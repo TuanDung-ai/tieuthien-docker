@@ -49,8 +49,8 @@ async def get_telegram_app() -> Application:
         print("DEBUG: Khởi tạo Telegram Application cho worker...", file=sys.stderr)
         app_instance = ApplicationBuilder().token(TOKEN).build()
         register_handlers(app_instance)
-        # Initialize the application for this worker
-        await app_instance.initialize() # Sử dụng await thay vì asyncio.run()
+        # KHÔNG GỌI app_instance.initialize() NỮA KHI DÙNG WEBHOOK VỚI FLASK/GUNICORN
+        # Flask/Gunicorn đã quản lý event loop, và initialize() có thể gây xung đột.
         setattr(web_app, 'telegram_app_instance', app_instance)
         print("DEBUG: Telegram Application khởi tạo thành công cho worker.", file=sys.stderr)
     return web_app.telegram_app_instance
