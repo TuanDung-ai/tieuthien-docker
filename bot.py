@@ -1,15 +1,25 @@
 # bot.py
 import os
-import threading
 import sys
-import asyncio # Import asyncio
-from flask import Flask
-from telegram.ext import ApplicationBuilder, Application # Import Application for type hinting
+import asyncio
+from flask import Flask, request, abort
+from telegram import Update
+from telegram.ext import ApplicationBuilder, Application
 
 # === TOKEN từ biến môi trường ===
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-# Lấy cổng từ biến môi trường PORT mà Zeabur cung cấp, mặc định là 8080 cho môi trường local
-PORT = int(os.getenv("PORT", 8080))
+PORT = int(os.getenv("PORT", 8080)) # Cổng mà Flask sẽ lắng nghe
+
+# Zeabur cung cấp URL công khai của dịch vụ.
+# Biến môi trường này cần được thiết lập trên Zeabur dashboard (ví dụ: ZEABUR_URL)
+ZEABUR_PUBLIC_URL = os.getenv("ZEABUR_URL") # Đây là biến môi trường phổ biến trên Zeabur
+if not ZEABUR_PUBLIC_URL:
+    print("WARNING: Biến môi trường ZEABUR_URL không tìm thấy. Vui lòng thiết lập trên Zeabur dashboard.", file=sys.stderr)
+    # Fallback cho việc chạy cục bộ (ví dụ: dùng ngrok để tạo tunnel)
+    ZEABUR_PUBLIC_URL = f"http://localhost:{PORT}" # Chỉ dùng cho test cục bộ, không dùng cho production
+
+WEBHOOK_PATH = "/telegram-webhook" # Đường dẫn webhook mà Telegram sẽ gửi cập nhật đến
+WEBHOOK_URL = f"{ZEABUR_PUBLIC_URL}{WEBHOOK_PATH}" # URL đầy đủ của webhook
 
 # === IMPORT các hàm ===
 try:
@@ -19,7 +29,10 @@ try:
     print("DEBUG: Import các module thành công.")
 except ImportError as e:
     print(f"LỖI KHỞI ĐỘNG: Không thể import module: {e}", file=sys.stderr)
-    sys.exit(1) # Thoát ngay nếu không import được
+    sys.exit(1)
+
+# Biến toàn cục cho đối tượng Telegram Application
+telegram_app: Application = None
 
 # === Web health check ===
 web_app = Flask(__name__)
@@ -29,36 +42,35 @@ web_app = Flask(__name__)
 def health_check():
     return "✅ Tiểu Thiên đang vận hành bình thường."
 
-# Hàm để chạy bot Telegram (trong một luồng riêng)
-def run_telegram_bot(app: Application): # Nhận đối tượng app
-    print("DEBUG: Bắt đầu luồng bot Telegram...")
-    try:
-        if not TOKEN:
-            print("LỖI: TELEGRAM_BOT_TOKEN không được thiết lập! Bot Telegram sẽ không chạy.", file=sys.stderr)
-            return # Exit thread if token is missing
+# Webhook endpoint cho Telegram
+@web_app.route(WEBHOOK_PATH, methods=['POST'])
+async def telegram_webhook():
+    if not telegram_app:
+        print("LỖI: Telegram Application instance chưa được khởi tạo.", file=sys.stderr)
+        abort(500) # Lỗi Server nội bộ
 
-        print("DEBUG: Đăng ký handlers cho bot Telegram...")
-        register_handlers(app) # Đăng ký handlers trên đối tượng app đã được truyền vào
+    # Lấy cập nhật từ body của request
+    # Update.de_json tạo một đối tượng Update từ JSON
+    update = Update.de_json(request.get_json(force=True), telegram_app.bot)
+    
+    # Xử lý cập nhật bằng đối tượng application
+    # Điều này sẽ chạy các handler đã đăng ký cho cập nhật
+    await telegram_app.process_update(update)
+    return "ok" # Trả về 'ok' để Telegram biết cập nhật đã được nhận
 
-        # Tạo và thiết lập một event loop mới cho luồng này
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-        print("🤖 Bot Thiên Cơ đã hồi sinh và vận hành (polling)...")
-        # Chạy polling. app.run_polling() sẽ tự quản lý event loop của nó.
-        # Đảm bảo nó được chạy trong luồng có event loop đã được thiết lập.
-        app.run_polling() # Đây là phương thức đúng để khởi động polling cho PTB v20+
-
-    except Exception as e:
-        print(f"LỖI NGHIÊM TRỌNG khi khởi động bot Telegram: {e}", file=sys.stderr)
-        # sys.exit(1) # Cân nhắc thoát toàn bộ ứng dụng nếu bot Telegram crash
+# Hàm bất đồng bộ để thiết lập webhook (cần chạy trong một event loop)
+async def set_telegram_webhook_async():
+    print(f"DEBUG: Đặt webhook cho bot Telegram tại URL: {WEBHOOK_URL}", file=sys.stderr)
+    await telegram_app.bot.set_webhook(url=WEBHOOK_URL)
+    print("DEBUG: Đặt webhook thành công.", file=sys.stderr)
 
 # === KHỞI ĐỘNG ỨNG DỤNG ===
 if __name__ == '__main__':
     print("DEBUG: Bắt đầu quá trình khởi động ứng dụng chính...")
     try:
-        # Khởi tạo đối tượng ApplicationBuilder ở đây để truyền cho luồng Telegram
+        # Khởi tạo đối tượng Telegram Application
         telegram_app = ApplicationBuilder().token(TOKEN).build()
+        register_handlers(telegram_app) # Đăng ký các handler
 
         # === Đồng bộ Supabase → SQLite ===
         print("DEBUG: Bắt đầu đồng bộ Supabase → SQLite...")
@@ -70,17 +82,26 @@ if __name__ == '__main__':
         sync_sqlite_to_supabase()
         print("DEBUG: Đồng bộ SQLite → Supabase hoàn tất.")
 
-        # Khởi động bot Telegram trong một luồng riêng, truyền đối tượng app
-        print("DEBUG: Khởi động luồng bot Telegram...")
-        telegram_thread = threading.Thread(target=run_telegram_bot, args=(telegram_app,))
-        telegram_thread.daemon = True
-        telegram_thread.start()
-        print("DEBUG: Luồng bot Telegram đã được khởi tạo.")
+        # Thiết lập webhook một cách bất đồng bộ
+        # Điều này cần được thực hiện một lần khi khởi động.
+        # asyncio.run() có thể được sử dụng nếu không có event loop nào đang chạy.
+        try:
+            asyncio.run(set_telegram_webhook_async())
+        except RuntimeError as e:
+            # Nếu có một event loop đang chạy (ví dụ: do Flask tự tạo trong môi trường async)
+            if "cannot run an event loop while another loop is running" in str(e):
+                print("WARNING: Có thể đã có một event loop đang chạy, thử sử dụng loop hiện có để thiết lập webhook.", file=sys.stderr)
+                loop = asyncio.get_event_loop()
+                loop.run_until_complete(set_telegram_webhook_async())
+            else:
+                raise e
 
-        # Khởi động Flask web app trong luồng chính
+        # Khởi động Flask web app trong luồng chính (blocking)
+        # Flask sẽ lắng nghe trên cổng và nhận các yêu cầu webhook từ Telegram
         print(f"DEBUG: Bắt đầu Flask web server trên cổng {PORT}...")
         web_app.run(host="0.0.0.0", port=PORT)
         print("DEBUG: Flask web server đã dừng (có thể do lỗi hoặc shutdown).")
+
     except Exception as e:
         print(f"LỖI NGHIÊM TRỌNG khi khởi động ứng dụng chính: {e}", file=sys.stderr)
         sys.exit(1)
