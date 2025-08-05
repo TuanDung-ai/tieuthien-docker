@@ -1,12 +1,12 @@
 # Các thư viện chính của bot
-python-telegram-bot==20.6  # Phiên bản Telegram bot mà bạn đang dùng
+python-telegram-bot==20.6
 
 # Thư viện cho Web server (Flask)
-Flask==3.1.1               # Phiên bản Flask ổn định
+Flask==3.1.1
 
-# Thư viện cho Supabase
-supabase==2.10.0           # Phiên bản Supabase client (đã cập nhật để khắc phục lỗi 'proxy')
-httpx                        # Bỏ ràng buộc phiên bản để pip tự động chọn phiên bản tương thích với supabase
+# Thư viện cho Supabase và các dependency cần thiết
+# Cài đặt supabase trước để nó tự động kéo về httpx phiên bản tương thích
+supabase==2.10.0
 
 # Thư viện cho Google Sheets (nếu bạn dùng gspread)
 gspread
@@ -17,5 +17,5 @@ gspread-asyncio
 python-dotenv
 
 # Nếu module AI của bạn sử dụng OpenRouter hoặc các API khác
-# openrouter-py # Ví dụ nếu bạn có thư viện riêng cho OpenRouter
-# requests # Nếu có bất kỳ phần nào của code sử dụng thư viện requests trực tiếp
+# openrouter-py
+# requests
