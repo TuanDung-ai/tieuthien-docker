@@ -2,7 +2,7 @@
 import sqlite3
 import os
 
-DB_FILE = "memory_full.db"
+DB_FILE = os.path.join(os.path.dirname(__file__), "memory_full.db")
 TABLE_NAME = "memories"
 
 def get_conn():
