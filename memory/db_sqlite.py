@@ -27,14 +27,20 @@ def init_db():
 
 def save_memory(user_id, content, note_type=None):
     """Lưu một ghi nhớ mới vào SQLite."""
+    print(f"DEBUG: Đang cố gắng lưu vào SQLite: User ID={user_id}, Content='{content}', Type='{note_type}'") # Dòng DEBUG quan trọng!
     conn = get_conn()
     cursor = conn.cursor()
-    cursor.execute(f"""
-        INSERT INTO {TABLE_NAME} (user_id, content, note_type)
-        VALUES (?, ?, ?)
-    """, (user_id, content, note_type))
-    conn.commit()
-    conn.close()
+    try:
+        cursor.execute(f"""
+            INSERT INTO {TABLE_NAME} (user_id, content, note_type)
+            VALUES (?, ?, ?)
+        """, (user_id, content, note_type))
+        conn.commit()
+        print("DEBUG: Lưu vào SQLite thành công.") # Dòng DEBUG quan trọng!
+    except sqlite3.Error as e:
+        print(f"LỖI SQLITE khi lưu ghi nhớ: {e}") # Bắt và in lỗi SQLite
+    finally:
+        conn.close()
 
 def get_memory(user_id, note_type=None):
     """Lấy các ghi nhớ từ SQLite dựa trên user_id và note_type."""
