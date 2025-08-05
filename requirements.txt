@@ -7,6 +7,7 @@ Flask==3.1.1
 # Thư viện cho Supabase và các dependency cần thiết
 # Cài đặt supabase trước để nó tự động kéo về httpx phiên bản tương thích
 supabase==2.10.0
+httpx==0.27.0  # Chỉ định rõ phiên bản httpx theo yêu cầu của supabase
 
 # Thư viện cho Google Sheets (nếu bạn dùng gspread)
 gspread
