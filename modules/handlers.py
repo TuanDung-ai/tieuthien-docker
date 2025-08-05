@@ -2,10 +2,9 @@ import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 
-# ✅ Sử dụng memory_manager thay vì memory_storage
+# ✅ Dùng memory_manager thay vì memory_storage
 from memory.memory_manager import (
-    save_memory, get_memory, search_memory,
-    clear_memory, get_recent_memories_for_prompt
+    save_memory, get_memory, delete_memory
 )
 
 from modules.ai_module import get_ai_response_with_memory
@@ -38,13 +37,11 @@ def get_note_type_keyboard():
         ]
     ])
 
-# === PHẢN HỒI AI ===
-def format_ai_response(text):
-    return (
-        "🌀 Thiên Cơ phản hồi:\n\n"
-        f"{text.strip()}\n\n"
-        "✨ Bạn muốn ghi nhớ, xem lịch, hay thư giãn?"
-    )
+# === LẤY GHI NHỚ GẦN NHẤT (cho prompt AI) ===
+def get_recent_memories_for_prompt(user_id, limit=3):
+    notes = get_memory(user_id)
+    recent = notes[:limit]
+    return "\n".join(f"- ({n['note_type']}) {n['content']}" for n in recent)
 
 # === HANDLERS CHÍNH ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -98,7 +95,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await query.edit_message_text("Bạn chưa có ghi nhớ nào.", reply_markup=get_main_keyboard())
     elif data == 'clear_all':
-        clear_memory(user_id)
+        delete_memory(user_id)
         await query.edit_message_text("🗑️ Đã xóa toàn bộ ghi nhớ.", reply_markup=get_main_keyboard())
     else:
         await query.edit_message_text("⚠️ Chức năng chưa khả dụng.", reply_markup=get_main_keyboard())
