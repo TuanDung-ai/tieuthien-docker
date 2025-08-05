@@ -16,6 +16,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Khai báo cổng Flask hoặc bot giữ cho container không chết
 EXPOSE 8080
 
-# Chạy bot bằng Gunicorn khi container khởi động
-# Sử dụng sh -c để đảm bảo biến môi trường PORT được giải quyết đúng cách
-CMD ["sh", "-c", "gunicorn -w 4 -b 0.0.0.0:${PORT} bot:web_app"]
+# Chạy script thiết lập webhook một lần, sau đó khởi động Gunicorn
+CMD ["sh", "-c", "python deploy_setup.py && gunicorn -w 4 -b 0.0.0.0:${PORT} bot:web_app"]
