@@ -1,7 +1,7 @@
 # bot.py
 import os
 import sys
-import asyncio
+import asyncio # Vẫn cần nếu có các hàm async khác trong handlers
 from flask import Flask, request, abort
 from telegram import Update
 from telegram.ext import ApplicationBuilder, Application
@@ -61,20 +61,6 @@ async def telegram_webhook():
         print(f"LỖI trong telegram_webhook: {e}", file=sys.stderr)
         return "error", 500
 
-# Hàm bất đồng bộ để khởi tạo Application và thiết lập webhook
-async def initialize_and_setup_telegram_app(app_instance: Application):
-    print("DEBUG: Initializing Telegram Application...", file=sys.stderr)
-    await app_instance.initialize() # Khởi tạo Application
-    print("DEBUG: Telegram Application initialized.", file=sys.stderr)
-
-    print(f"DEBUG: Đặt webhook cho bot Telegram tại URL: {WEBHOOK_URL}", file=sys.stderr)
-    await app_instance.bot.set_webhook(url=WEBHOOK_URL)
-    print("DEBUG: Đặt webhook thành công.", file=sys.stderr)
-
-    print("DEBUG: Starting Telegram Application (for webhook processing)...", file=sys.stderr)
-    await app_instance.start() # Khởi động Application để xử lý cập nhật
-    print("DEBUG: Telegram Application started.", file=sys.stderr)
-
 # === KHỞI ĐỘNG ỨNG DỤNG (LOGIC CHẠY KHI MODULE ĐƯỢC IMPORT BỞI GUNICORN) ===
 # Tất cả logic khởi tạo cần được đặt ở đây, ngoài khối if __name__ == '__main__':
 print("DEBUG: Bắt đầu quá trình khởi động ứng dụng chính (Gunicorn context)...", file=sys.stderr)
@@ -93,19 +79,9 @@ try:
     sync_sqlite_to_supabase()
     print("DEBUG: Đồng bộ SQLite → Supabase hoàn tất.", file=sys.stderr)
 
-    # Chạy hàm bất đồng bộ initialize_and_setup_telegram_app
-    # Mỗi Gunicorn worker sẽ chạy phần này một lần
-    try:
-        # Attempt to get the current running event loop
-        loop = asyncio.get_event_loop()
-        # If a loop exists, run the async setup in it
-        loop.run_until_complete(initialize_and_setup_telegram_app(telegram_app))
-    except RuntimeError:
-        # If no loop is running (e.g., in some Gunicorn worker types), create a new one
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(initialize_and_setup_telegram_app(telegram_app))
-        loop.close() # Close the loop if we created it
+    # KHÔNG CÒN GỌI initialize_and_setup_telegram_app() HOẶC setup_telegram_webhook_only() Ở ĐÂY NỮA
+    # Việc đặt webhook đã được xử lý bởi deploy_setup.py
+    # Việc initialize() và start() không cần thiết cho webhook và gây lỗi.
 
     print("DEBUG: Ứng dụng đã sẵn sàng. Gunicorn sẽ khởi chạy web server.", file=sys.stderr)
 
