@@ -25,7 +25,7 @@ WEBHOOK_URL = f"{ZEABUR_PUBLIC_URL}{WEBHOOK_PATH}" # URL đầy đủ của webh
 try:
     from modules.handlers import register_handlers
     from memory.sync_on_startup import ensure_sqlite_cache
-    from memory.sync_to_cloud import sync_sqlite_to_supabase
+    from memory.sync_to_cloud import sync_sqlite_to_supabase # <-- Hàm này được import
     print("DEBUG: Import các module thành công.")
 except ImportError as e:
     print(f"LỖI KHỞI ĐỘNG: Không thể import module: {e}", file=sys.stderr)
@@ -77,7 +77,7 @@ if __name__ == '__main__':
 
         # === Đồng bộ SQLite → Supabase ===
         print("DEBUG: Bắt đầu đồng bộ SQLite → Supabase...")
-        sync_sqlite_to_cloud()
+        sync_sqlite_to_supabase() # <-- Sửa từ sync_sqlite_to_cloud() thành sync_sqlite_to_supabase()
         print("DEBUG: Đồng bộ SQLite → Supabase hoàn tất.")
 
         # Thiết lập webhook một cách bất đồng bộ
