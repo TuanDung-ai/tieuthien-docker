@@ -17,7 +17,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 EXPOSE 8080
 
 # Chạy bot bằng Gunicorn khi container khởi động
-# Gunicorn sẽ chạy ứng dụng Flask (web_app) từ file bot.py
-# -w: số lượng worker processes
-# -b: địa chỉ IP và cổng để lắng nghe (lấy từ biến môi trường PORT của Zeabur)
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:${PORT}", "bot:web_app"]
+# Sử dụng sh -c để đảm bảo biến môi trường PORT được giải quyết đúng cách
+CMD ["sh", "-c", "gunicorn -w 4 -b 0.0.0.0:${PORT} bot:web_app"]
