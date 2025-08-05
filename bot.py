@@ -41,7 +41,8 @@ def health_check():
     return "✅ Tiểu Thiên đang vận hành bình thường."
 
 # Hàm để lấy hoặc khởi tạo đối tượng Telegram Application cho mỗi worker
-def get_telegram_app() -> Application:
+# Hàm này giờ là async vì nó gọi app_instance.initialize()
+async def get_telegram_app() -> Application:
     # Sử dụng một thuộc tính trên đối tượng Flask app để lưu trữ instance của telegram_app
     # Điều này đảm bảo mỗi worker có một instance riêng biệt
     if not hasattr(web_app, 'telegram_app_instance'):
@@ -49,7 +50,7 @@ def get_telegram_app() -> Application:
         app_instance = ApplicationBuilder().token(TOKEN).build()
         register_handlers(app_instance)
         # Initialize the application for this worker
-        asyncio.run(app_instance.initialize()) # Initialize here for each worker
+        await app_instance.initialize() # Sử dụng await thay vì asyncio.run()
         setattr(web_app, 'telegram_app_instance', app_instance)
         print("DEBUG: Telegram Application khởi tạo thành công cho worker.", file=sys.stderr)
     return web_app.telegram_app_instance
@@ -59,8 +60,8 @@ def get_telegram_app() -> Application:
 async def telegram_webhook():
     print("DEBUG: Webhook nhận được yêu cầu POST!", file=sys.stderr)
     
-    # Lấy instance telegram_app cho worker hiện tại
-    current_telegram_app = get_telegram_app()
+    # Lấy instance telegram_app cho worker hiện tại (giờ là awaitable)
+    current_telegram_app = await get_telegram_app()
 
     try:
         json_data = request.get_json(force=True)
