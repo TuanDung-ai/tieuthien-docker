@@ -4,30 +4,27 @@ import sys
 import asyncio
 from flask import Flask, request, abort
 from telegram import Update
-from telegram.ext import ApplicationBuilder, Application # Import Application for type hinting
+from telegram.ext import ApplicationBuilder, Application
 
 # === TOKEN từ biến môi trường ===
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-# Lấy cổng từ biến môi trường PORT mà Zeabur cung cấp, mặc định là 8080 cho môi trường local
 PORT = int(os.getenv("PORT", 8080))
 
 # Zeabur cung cấp URL công khai của dịch vụ.
-# Biến môi trường này cần được thiết lập trên Zeabur dashboard (ví dụ: ZEABUR_URL)
-ZEABUR_PUBLIC_URL = os.getenv("ZEABUR_URL") # Đây là biến môi trường phổ biến trên Zeabur
+ZEABUR_PUBLIC_URL = os.getenv("ZEABUR_URL")
 if not ZEABUR_PUBLIC_URL:
     print("WARNING: Biến môi trường ZEABUR_URL không tìm thấy. Vui lòng thiết lập trên Zeabur dashboard.", file=sys.stderr)
-    # Fallback cho việc chạy cục bộ (ví dụ: dùng ngrok để tạo tunnel)
-    ZEABUR_PUBLIC_URL = f"http://localhost:{PORT}" # Chỉ dùng cho test cục bộ, không dùng cho production
+    ZEABUR_PUBLIC_URL = f"http://localhost:{PORT}" # Fallback cho local testing
 
-WEBHOOK_PATH = "/telegram-webhook" # Đường dẫn webhook mà Telegram sẽ gửi cập nhật đến
-WEBHOOK_URL = f"{ZEABUR_PUBLIC_URL}{WEBHOOK_PATH}" # URL đầy đủ của webhook
+WEBHOOK_PATH = "/telegram-webhook"
+WEBHOOK_URL = f"{ZEABUR_PUBLIC_URL}{WEBHOOK_PATH}"
 
 # === IMPORT các hàm ===
 try:
     from modules.handlers import register_handlers
     from memory.sync_on_startup import ensure_sqlite_cache
     from memory.sync_to_cloud import sync_sqlite_to_supabase
-    print("DEBUG: Import các module thành công.")
+    print("DEBUG: Import các module thành công.", file=sys.stderr)
 except ImportError as e:
     print(f"LỖI KHỞI ĐỘNG: Không thể import module: {e}", file=sys.stderr)
     sys.exit(1)
@@ -49,7 +46,7 @@ async def telegram_webhook():
     print("DEBUG: Webhook nhận được yêu cầu POST!", file=sys.stderr)
     if not telegram_app:
         print("LỖI: Telegram Application instance chưa được khởi tạo.", file=sys.stderr)
-        abort(500) # Lỗi Server nội bộ
+        abort(500)
 
     try:
         json_data = request.get_json(force=True)
@@ -59,55 +56,64 @@ async def telegram_webhook():
         print(f"DEBUG: Update nhận được: {update.update_id}, từ người dùng: {update.effective_user.id}", file=sys.stderr)
         await telegram_app.process_update(update)
         print("DEBUG: process_update đã được gọi.", file=sys.stderr)
-        return "ok" # Trả về 'ok' để Telegram biết cập nhật đã được nhận
+        return "ok"
     except Exception as e:
         print(f"LỖI trong telegram_webhook: {e}", file=sys.stderr)
-        # Không abort(500) ngay lập tức, có thể in lỗi và trả về 200 để Telegram không ngắt webhook
-        return "error", 500 # Trả về lỗi server nếu có vấn đề
+        return "error", 500
 
-# Hàm bất đồng bộ để thiết lập webhook (chỉ đặt webhook, không start/initialize app)
+# Hàm bất đồng bộ để thiết lập webhook (chỉ đặt webhook)
 async def setup_telegram_webhook_only():
     print(f"DEBUG: Đặt webhook cho bot Telegram tại URL: {WEBHOOK_URL}", file=sys.stderr)
     await telegram_app.bot.set_webhook(url=WEBHOOK_URL)
     print("DEBUG: Đặt webhook thành công.", file=sys.stderr)
 
-# === KHỞI ĐỘNG ỨNG DỤNG ===
-if __name__ == '__main__':
-    print("DEBUG: Bắt đầu quá trình khởi động ứng dụng chính...", file=sys.stderr)
+# === KHỞI ĐỘNG ỨNG DỤNG (LOGIC CHẠY KHI MODULE ĐƯỢC IMPORT BỞI GUNICORN) ===
+# Tất cả logic khởi tạo cần được đặt ở đây, ngoài khối if __name__ == '__main__':
+print("DEBUG: Bắt đầu quá trình khởi động ứng dụng chính (Gunicorn context)...", file=sys.stderr)
+try:
+    # Khởi tạo đối tượng Telegram Application
+    telegram_app = ApplicationBuilder().token(TOKEN).build()
+    register_handlers(telegram_app) # Đăng ký các handler
+
+    # === Đồng bộ Supabase → SQLite ===
+    print("DEBUG: Bắt đầu đồng bộ Supabase → SQLite...", file=sys.stderr)
+    ensure_sqlite_cache()
+    print("DEBUG: Đồng bộ Supabase → SQLite hoàn tất.", file=sys.stderr)
+
+    # === Đồng bộ SQLite → Supabase ===
+    print("DEBUG: Bắt đầu đồng bộ SQLite → Supabase...", file=sys.stderr)
+    sync_sqlite_to_supabase()
+    print("DEBUG: Đồng bộ SQLite → Supabase hoàn tất.", file=sys.stderr)
+
+    # Thiết lập webhook một cách bất đồng bộ
+    # Cần đảm bảo rằng đây là một one-time operation và không gây blocking
+    # The safest way is to run it in a separate thread or use a background task
+    # However, for simplicity and to get logs, let's try to run it directly
+    # if an event loop is available, or create one for it.
+
+    # This part is still the most complex.
+    # Let's try to get the existing loop from the main thread (where Gunicorn imports the app)
+    # and run the async task.
     try:
-        # Khởi tạo đối tượng Telegram Application
-        telegram_app = ApplicationBuilder().token(TOKEN).build()
-        register_handlers(telegram_app) # Đăng ký các handler
+        # Attempt to get the current running event loop
+        loop = asyncio.get_event_loop()
+        # If a loop exists, run the async setup in it
+        loop.run_until_complete(setup_telegram_webhook_only())
+    except RuntimeError:
+        # If no loop is running (e.g., in some Gunicorn worker types), create a new one
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(setup_telegram_webhook_only())
+        loop.close() # Close the loop if we created it
 
-        # === Đồng bộ Supabase → SQLite ===
-        print("DEBUG: Bắt đầu đồng bộ Supabase → SQLite...", file=sys.stderr)
-        ensure_sqlite_cache()
-        print("DEBUG: Đồng bộ Supabase → SQLite hoàn tất.", file=sys.stderr)
+    print("DEBUG: Ứng dụng đã sẵn sàng. Gunicorn sẽ khởi chạy web server.", file=sys.stderr)
 
-        # === Đồng bộ SQLite → Supabase ===
-        print("DEBUG: Bắt đầu đồng bộ SQLite → Supabase...", file=sys.stderr)
-        sync_sqlite_to_supabase()
-        print("DEBUG: Đồng bộ SQLite → Supabase hoàn tất.", file=sys.stderr)
+except Exception as e:
+    print(f"LỖI NGHIÊM TRỌNG khi khởi động ứng dụng chính: {e}", file=sys.stderr)
+    sys.exit(1)
 
-        # Thiết lập webhook một cách bất đồng bộ
-        # Chạy hàm async trong main thread.
-        # asyncio.run() sẽ tạo và quản lý event loop cần thiết cho đến khi hàm kết thúc.
-        try:
-            asyncio.run(setup_telegram_webhook_only())
-        except RuntimeError as e:
-            # Nếu có một event loop đang chạy (ví dụ: do Flask tự tạo trong môi trường async)
-            # Flask 3.x with Flask[async] runs its own event loop.
-            # We need to ensure set_webhook is run in that loop.
-            if "cannot run an event loop while another loop is running" in str(e):
-                print("WARNING: Có thể đã có một event loop đang chạy, thử sử dụng loop hiện có để thiết lập webhook.", file=sys.stderr)
-                loop = asyncio.get_event_loop()
-                loop.run_until_complete(setup_telegram_webhook_only())
-            else:
-                raise e
-
-        # KHÔNG CHẠY web_app.run() Ở ĐÂY NỮA, GUNICORN SẼ LÀM VIỆC ĐÓ
-        print("DEBUG: Ứng dụng đã sẵn sàng. Gunicorn sẽ khởi chạy web server.", file=sys.stderr)
-
-    except Exception as e:
-        print(f"LỖI NGHIÊM TRỌNG khi khởi động ứng dụng chính: {e}", file=sys.stderr)
-        sys.exit(1)
+# The if __name__ == '__main__': block is now empty or used for local testing only
+if __name__ == '__main__':
+    print("DEBUG: Chạy cục bộ (không dùng Gunicorn).", file=sys.stderr)
+    # This block is for local development without Gunicorn
+    # web_app.run(host="0.0.0.0", port=PORT) # Uncomment for local Flask dev server
