@@ -6,7 +6,7 @@ Flask==3.1.1               # Phiên bản Flask ổn định
 
 # Thư viện cho Supabase
 supabase==2.10.0           # Phiên bản Supabase client (đã cập nhật để khắc phục lỗi 'proxy')
-httpx==0.27.0              # Thư viện HTTP client, cần phiên bản tương thích với Supabase
+httpx                        # Bỏ ràng buộc phiên bản để pip tự động chọn phiên bản tương thích với supabase
 
 # Thư viện cho Google Sheets (nếu bạn dùng gspread)
 gspread
