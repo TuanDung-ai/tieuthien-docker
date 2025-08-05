@@ -1,10 +1,10 @@
 # bot.py
 import os
 import sys
-import asyncio
+import asyncio # Import asyncio
 from flask import Flask, request, abort
 from telegram import Update
-from telegram.ext import ApplicationBuilder, Application
+from telegram.ext import ApplicationBuilder, Application # Import Application for type hinting
 
 # === TOKEN từ biến môi trường ===
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -50,19 +50,25 @@ async def telegram_webhook():
         abort(500) # Lỗi Server nội bộ
 
     # Lấy cập nhật từ body của request
-    # Update.de_json tạo một đối tượng Update từ JSON
     update = Update.de_json(request.get_json(force=True), telegram_app.bot)
     
     # Xử lý cập nhật bằng đối tượng application
-    # Điều này sẽ chạy các handler đã đăng ký cho cập nhật
     await telegram_app.process_update(update)
     return "ok" # Trả về 'ok' để Telegram biết cập nhật đã được nhận
 
 # Hàm bất đồng bộ để thiết lập webhook (cần chạy trong một event loop)
 async def set_telegram_webhook_async():
+    print("DEBUG: Initializing Telegram Application...", file=sys.stderr)
+    await telegram_app.initialize() # Khởi tạo Application
+    print("DEBUG: Telegram Application initialized.", file=sys.stderr)
+
     print(f"DEBUG: Đặt webhook cho bot Telegram tại URL: {WEBHOOK_URL}", file=sys.stderr)
     await telegram_app.bot.set_webhook(url=WEBHOOK_URL)
     print("DEBUG: Đặt webhook thành công.", file=sys.stderr)
+
+    print("DEBUG: Starting Telegram Application (for webhook processing)...", file=sys.stderr)
+    await telegram_app.start() # Khởi động Application để xử lý cập nhật
+    print("DEBUG: Telegram Application started.", file=sys.stderr)
 
 # === KHỞI ĐỘNG ỨNG DỤNG ===
 if __name__ == '__main__':
@@ -83,12 +89,12 @@ if __name__ == '__main__':
         print("DEBUG: Đồng bộ SQLite → Supabase hoàn tất.")
 
         # Thiết lập webhook một cách bất đồng bộ
-        # Điều này cần được thực hiện một lần khi khởi động.
-        # asyncio.run() có thể được sử dụng nếu không có event loop nào đang chạy.
         try:
+            # Chạy hàm async trong main thread.
+            # asyncio.run() sẽ tạo và quản lý event loop cần thiết.
             asyncio.run(set_telegram_webhook_async())
         except RuntimeError as e:
-            # Nếu có một event loop đang chạy (ví dụ: do Flask tự tạo trong môi trường async)
+            # Xử lý trường hợp đã có event loop đang chạy (ít khả năng xảy ra trong ngữ cảnh này)
             if "cannot run an event loop while another loop is running" in str(e):
                 print("WARNING: Có thể đã có một event loop đang chạy, thử sử dụng loop hiện có để thiết lập webhook.", file=sys.stderr)
                 loop = asyncio.get_event_loop()
