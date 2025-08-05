@@ -45,13 +45,9 @@ def run_telegram_bot(app: Application): # Nhận đối tượng app
         asyncio.set_event_loop(loop)
 
         print("🤖 Bot Thiên Cơ đã hồi sinh và vận hành (polling)...")
-        # Chạy polling trong event loop của luồng này
-        # app.run_polling() là một blocking call, nó sẽ tự quản lý loop
-        # Tuy nhiên, lỗi "no current event loop" cho thấy cần thiết lập rõ ràng
-        # Cách tốt nhất là dùng app.updater.start() và app.idle()
-        loop.run_until_complete(app.updater.start()) # Khởi động updater bất đồng bộ
-        app.idle() # Giữ bot chạy và lắng nghe (blocking call)
-        loop.close() # Đóng loop khi bot dừng
+        # Chạy polling. app.run_polling() sẽ tự quản lý event loop của nó.
+        # Đảm bảo nó được chạy trong luồng có event loop đã được thiết lập.
+        app.run_polling() # Đây là phương thức đúng để khởi động polling cho PTB v20+
 
     except Exception as e:
         print(f"LỖI NGHIÊM TRỌNG khi khởi động bot Telegram: {e}", file=sys.stderr)
