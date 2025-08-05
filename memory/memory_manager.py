@@ -1,3 +1,4 @@
+# memory/memory_manager.py
 from .db_sqlite import (
     get_memory as get_memory_local,
     save_memory as save_memory_local,
@@ -35,9 +36,10 @@ def get_memory(user_id, note_type=None):
 
 # === LƯU GHI NHỚ ===
 def save_memory(user_id, content, note_type=None):
-    print("Lưu dữ liệu vào cả SQLite và Supabase.")
+    print(f"DEBUG: memory_manager đang nhận dữ liệu để lưu: User ID={user_id}, Content='{content}', Type='{note_type}'") # Dòng DEBUG quan trọng!
     save_memory_local(user_id, content, note_type)
     save_memory_cloud(user_id, content, note_type)
+    print("DEBUG: memory_manager đã gọi hàm lưu cục bộ và đám mây.") # Dòng DEBUG quan trọng!
 
 # === XOÁ GHI NHỚ ===
 def delete_memory(user_id):
