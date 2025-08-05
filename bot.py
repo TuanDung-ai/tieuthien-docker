@@ -2,22 +2,22 @@
 import os
 import sys
 import asyncio
-from flask import Flask, request, abort
+import httpx
+from fastapi import FastAPI, Request, Response
+
 from telegram import Update
-from telegram.ext import ApplicationBuilder, Application
+from telegram.ext import Application, ApplicationBuilder
 
-# === TOKEN từ biến môi trường ===
+# === Cấu hình từ biến môi trường ===
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+if not TOKEN:
+    print("LỖI NGHIÊM TRỌNG: Biến môi trường TELEGRAM_BOT_TOKEN không được thiết lập.", file=sys.stderr)
+    sys.exit(1)
+
 PORT = int(os.getenv("PORT", 8080))
-
-# Zeabur cung cấp URL công khai của dịch vụ.
 ZEABUR_PUBLIC_URL = os.getenv("ZEABUR_URL")
-if not ZEABUR_PUBLIC_URL:
-    print("WARNING: Biến môi trường ZEABUR_URL không tìm thấy. Vui lòng thiết lập trên Zeabur dashboard.", file=sys.stderr)
-    ZEABUR_PUBLIC_URL = f"http://localhost:{PORT}" # Fallback cho local testing
-
 WEBHOOK_PATH = "/telegram-webhook"
-WEBHOOK_URL = f"{ZEABUR_PUBLIC_URL}{WEBHOOK_PATH}"
+WEBHOOK_URL = f"{ZEABUR_PUBLIC_URL}{WEBHOOK_PATH}" if ZEABUR_PUBLIC_URL else None
 
 # === IMPORT các hàm ===
 try:
@@ -29,79 +29,108 @@ except ImportError as e:
     print(f"LỖI KHỞI ĐỘNG: Không thể import module: {e}", file=sys.stderr)
     sys.exit(1)
 
-# KHÔNG DÙNG biến toàn cục telegram_app ở đây nữa
-# Mỗi worker sẽ có instance riêng
+# === Khởi tạo ứng dụng FastAPI và Telegram Application ===
+# Sử dụng FastAPI thay vì Flask
+app = FastAPI(docs_url=None, redoc_url=None) # Tắt docs tự động cho an toàn
 
-# === Web health check ===
-web_app = Flask(__name__)
+# Tạo một instance duy nhất cho Application
+# Instance này sẽ được chia sẻ an toàn trong môi trường ASGI
+telegram_app: Application = ApplicationBuilder().token(TOKEN).build()
 
-@web_app.route('/')
-@web_app.route('/health')
-def health_check():
-    return "✅ Tiểu Thiên đang vận hành bình thường."
 
-# Hàm để lấy hoặc khởi tạo đối tượng Telegram Application cho mỗi worker
-# Hàm này giờ là async vì nó gọi app_instance.initialize()
-async def get_telegram_app() -> Application:
-    # Sử dụng một thuộc tính trên đối tượng Flask app để lưu trữ instance của telegram_app
-    # Điều này đảm bảo mỗi worker có một instance riêng biệt
-    if not hasattr(web_app, 'telegram_app_instance'):
-        print("DEBUG: Khởi tạo Telegram Application cho worker...", file=sys.stderr)
-        app_instance = ApplicationBuilder().token(TOKEN).build()
-        register_handlers(app_instance)
-        # THÊM LẠI app_instance.initialize() VÀ DÙNG await
-        await app_instance.initialize() 
-        setattr(web_app, 'telegram_app_instance', app_instance)
-        print("DEBUG: Telegram Application khởi tạo thành công cho worker.", file=sys.stderr)
-    return web_app.telegram_app_instance
-
-# Webhook endpoint cho Telegram
-@web_app.route(WEBHOOK_PATH, methods=['POST'])
-async def telegram_webhook():
-    print("DEBUG: Webhook nhận được yêu cầu POST!", file=sys.stderr)
-    
-    # Lấy instance telegram_app cho worker hiện tại (giờ là awaitable)
-    current_telegram_app = await get_telegram_app()
-
+@app.on_event("startup")
+async def startup_event():
+    """
+    Hàm này chạy một lần duy nhất khi ứng dụng ASGI khởi động.
+    Đây là nơi lý tưởng để thực hiện các tác vụ cài đặt.
+    """
+    print("DEBUG: Bắt đầu quá trình khởi động ứng dụng (startup_event)...", file=sys.stderr)
     try:
-        json_data = request.get_json(force=True)
+        # 1. Đồng bộ dữ liệu từ cloud về local
+        print("DEBUG: Bắt đầu đồng bộ Supabase → SQLite...", file=sys.stderr)
+        ensure_sqlite_cache()
+        print("DEBUG: Đồng bộ Supabase → SQLite hoàn tất.", file=sys.stderr)
+
+        # 2. Đồng bộ dữ liệu từ local lên cloud (nếu cần)
+        print("DEBUG: Bắt đầu đồng bộ SQLite → Supabase...", file=sys.stderr)
+        sync_sqlite_to_supabase()
+        print("DEBUG: Đồng bộ SQLite → Supabase hoàn tất.", file=sys.stderr)
+
+        # 3. Đăng ký các handlers cho bot
+        register_handlers(telegram_app)
+        print("DEBUG: Đăng ký các handlers thành công.", file=sys.stderr)
+
+        # 4. Khởi tạo Application (quan trọng!)
+        await telegram_app.initialize()
+        print("DEBUG: Telegram Application đã được initialize.", file=sys.stderr)
+
+        # 5. Thiết lập Webhook
+        # Mã này chỉ nên chạy khi deploy, không chạy ở local
+        if ZEABUR_PUBLIC_URL:
+            print(f"DEBUG: Thiết lập webhook tới URL: {WEBHOOK_URL}", file=sys.stderr)
+            async with httpx.AsyncClient() as client:
+                response = await client.get(f"https://api.telegram.org/bot{TOKEN}/setWebhook?url={WEBHOOK_URL}&drop_pending_updates=True")
+                if response.status_code == 200 and response.json().get("ok"):
+                    print("DEBUG: Webhook đã được thiết lập thành công!", file=sys.stderr)
+                else:
+                    print(f"LỖI: Không thể thiết lập webhook. Phản hồi từ Telegram: {response.text}", file=sys.stderr)
+        else:
+             print("INFO: ZEABUR_URL không được thiết lập, bỏ qua việc cài đặt webhook. Bot sẽ chạy ở chế độ polling nếu được khởi động trực tiếp.", file=sys.stderr)
+
+
+    except Exception as e:
+        print(f"LỖI NGHIÊM TRỌNG trong quá trình startup: {e}", file=sys.stderr)
+        # Tùy chọn: có thể muốn thoát ứng dụng ở đây nếu startup thất bại
+        # sys.exit(1)
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Hàm này chạy khi ứng dụng tắt."""
+    print("DEBUG: Bắt đầu quá trình shutdown...", file=sys.stderr)
+    await telegram_app.shutdown()
+    print("DEBUG: Telegram Application đã được shutdown.", file=sys.stderr)
+
+
+# === Các Endpoints của Web App ===
+
+@app.get("/")
+@app.get("/health")
+def health_check():
+    """Endpoint để kiểm tra tình trạng hoạt động."""
+    return {"status": "ok", "message": "✅ Tiểu Thiên đang vận hành bình thường."}
+
+
+@app.post(WEBHOOK_PATH)
+async def telegram_webhook(request: Request):
+    """Endpoint nhận các cập nhật từ Telegram."""
+    try:
+        # Lấy dữ liệu JSON từ request
+        json_data = await request.json()
         print(f"DEBUG: Dữ liệu JSON từ webhook: {json_data}", file=sys.stderr)
-        update = Update.de_json(json_data, current_telegram_app.bot)
         
-        print(f"DEBUG: Update nhận được: {update.update_id}, từ người dùng: {update.effective_user.id}", file=sys.stderr)
-        await current_telegram_app.process_update(update)
-        print("DEBUG: process_update đã được gọi.", file=sys.stderr)
-        return "ok"
+        # Tạo đối tượng Update
+        update = Update.de_json(json_data, telegram_app.bot)
+        
+        # Xử lý update
+        # process_update sẽ chạy các handler tương ứng một cách bất đồng bộ
+        # mà không làm block hay đóng event loop.
+        await telegram_app.process_update(update)
+        print(f"DEBUG: Đã xử lý thành công update_id: {update.update_id}", file=sys.stderr)
+
+        # Trả về 200 OK cho Telegram
+        return Response(status_code=200)
+
     except Exception as e:
         print(f"LỖI trong telegram_webhook: {e}", file=sys.stderr)
-        return "error", 500
+        return Response(status_code=500)
 
-# === KHỞI ĐỘNG ỨNG DỤNG (LOGIC CHẠY KHI MODULE ĐƯỢC IMPORT BỞI GUNICORN) ===
-# Các logic đồng bộ Supabase vẫn giữ nguyên ở đây
-print("DEBUG: Bắt đầu quá trình khởi động ứng dụng chính (Gunicorn context)...", file=sys.stderr)
-try:
-    # === Đồng bộ Supabase → SQLite ===
-    print("DEBUG: Bắt đầu đồng bộ Supabase → SQLite...", file=sys.stderr)
-    ensure_sqlite_cache()
-    print("DEBUG: Đồng bộ Supabase → SQLite hoàn tất.", file=sys.stderr)
 
-    # === Đồng bộ SQLite → Supabase ===
-    print("DEBUG: Bắt đầu đồng bộ SQLite → Supabase...", file=sys.stderr)
-    sync_sqlite_to_supabase()
-    print("DEBUG: Đồng bộ SQLite → Supabase hoàn tất.", file=sys.stderr)
-
-    # KHÔNG CÒN initialize() hay start() ở đây nữa
-    # Việc khởi tạo telegram_app sẽ diễn ra trong get_telegram_app() cho mỗi worker
-    # Việc đặt webhook đã được xử lý bởi deploy_setup.py
-
-    print("DEBUG: Ứng dụng đã sẵn sàng. Gunicorn sẽ khởi chạy web server.", file=sys.stderr)
-
-except Exception as e:
-    print(f"LỖI NGHIÊM TRỌNG khi khởi động ứng dụng chính: {e}", file=sys.stderr)
-    sys.exit(1)
-
-# The if __name__ == '__main__': block is now empty or used for local testing only
+# === Chạy cục bộ để test (sử dụng uvicorn) ===
 if __name__ == '__main__':
-    print("DEBUG: Chạy cục bộ (không dùng Gunicorn).", file=sys.stderr)
-    # This block is for local development without Gunicorn
-    # web_app.run(host="0.0.0.0", port=PORT) # Uncomment for local Flask dev server
+    print("DEBUG: Chạy cục bộ bằng uvicorn...", file=sys.stderr)
+    import uvicorn
+    # Khi chạy local, ZEABUR_URL không có, bot sẽ không set webhook
+    # Bạn có thể chạy bot ở chế độ polling để test
+    # asyncio.run(telegram_app.run_polling())
+    # Hoặc dùng ngrok để tạo URL public và set biến môi trường ZEABUR_URL để test webhook
+    uvicorn.run(app, host="0.0.0.0", port=PORT)
