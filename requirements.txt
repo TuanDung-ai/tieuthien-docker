@@ -2,7 +2,9 @@
 python-telegram-bot==21.0
 
 # Thư viện cho Web server (Flask)
-Flask[async]==3.1.1       # Cài đặt Flask với hỗ trợ async
+Flask==3.1.1
+Flask[async] # Đảm bảo cài đặt Flask với hỗ trợ async
+gunicorn # Thêm Gunicorn vào đây
 
 # Thư viện cho Supabase và các dependency cần thiết
 supabase==2.10.0
