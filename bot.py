@@ -29,15 +29,20 @@ except ImportError as e:
 
 # === Khởi tạo ứng dụng FastAPI và Telegram Application ===
 app = FastAPI(docs_url=None, redoc_url=None)
-
 telegram_app: Application = ApplicationBuilder().token(TOKEN).build()
+
+# Biến môi trường để xác định worker chính
+# Gunicorn sẽ tự động gán giá trị cho GUNICORN_WORKER_ID
+IS_MAIN_WORKER = os.getenv("GUNICORN_WORKER_ID", "1") == "1"
 
 @app.on_event("startup")
 async def startup_event():
     """
     Hàm này chạy một lần duy nhất khi ứng dụng ASGI khởi động.
     """
-    print("DEBUG: Bắt đầu quá trình khởi động ứng dụng (startup_event)...", file=sys.stderr)
+    worker_id = os.getenv('GUNICORN_WORKER_ID', 'N/A')
+    print(f"DEBUG: Bắt đầu quá trình khởi động ứng dụng (startup_event) cho worker {worker_id}...", file=sys.stderr)
+    
     try:
         # Đăng ký các handlers cho bot
         register_handlers(telegram_app)
@@ -47,17 +52,19 @@ async def startup_event():
         await telegram_app.initialize()
         print("DEBUG: Telegram Application đã được initialize.", file=sys.stderr)
 
-        # Thiết lập Webhook
-        if ZEABUR_PUBLIC_URL:
-            print(f"DEBUG: Thiết lập webhook tới URL: {WEBHOOK_URL}", file=sys.stderr)
+        # CHỈ THIẾT LẬP WEBHOOK CHO MỘT WORKER DUY NHẤT
+        if IS_MAIN_WORKER and ZEABUR_PUBLIC_URL:
+            print(f"DEBUG: [Worker chính] Thiết lập webhook tới URL: {WEBHOOK_URL}", file=sys.stderr)
             async with httpx.AsyncClient() as client:
                 response = await client.get(f"https://api.telegram.org/bot{TOKEN}/setWebhook?url={WEBHOOK_URL}&drop_pending_updates=True")
                 if response.status_code == 200 and response.json().get("ok"):
                     print("DEBUG: Webhook đã được thiết lập thành công!", file=sys.stderr)
                 else:
                     print(f"LỖI: Không thể thiết lập webhook. Phản hồi từ Telegram: {response.text}", file=sys.stderr)
+        elif not IS_MAIN_WORKER:
+            print(f"INFO: [Worker {worker_id}] Bỏ qua việc thiết lập webhook.", file=sys.stderr)
         else:
-             print("INFO: ZEABUR_URL không được thiết lập, bỏ qua việc cài đặt webhook. Bot sẽ chạy ở chế độ polling nếu được khởi động trực tiếp.", file=sys.stderr)
+             print("INFO: ZEABUR_URL không được thiết lập, bỏ qua việc cài đặt webhook.", file=sys.stderr)
 
     except Exception as e:
         print(f"LỖI NGHIÊM TRỌNG trong quá trình startup: {e}", file=sys.stderr)
