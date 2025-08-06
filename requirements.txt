@@ -1,23 +1,4 @@
-# requirements.txt
-
-# Thư viện chính của bot
 python-telegram-bot==21.0
-
-# === THAY ĐỔI: Chuyển từ Flask (WSGI) sang FastAPI (ASGI) ===
-# Thư viện cho Web server (FastAPI) và máy chủ ASGI (Uvicorn)
-fastapi
-uvicorn
-
-# Trình quản lý tiến trình (Process manager)
-gunicorn
-
-# Thư viện cho Supabase và các dependency cần thiết
 supabase==2.10.0
 httpx==0.27.0
-
-# Thư viện cho Google Sheets (giữ nguyên nếu bạn vẫn dùng)
-gspread
-gspread-asyncio
-
-# Thư viện tiện ích
-python-dotenv # Hữu ích khi chạy local
+python-dotenv
