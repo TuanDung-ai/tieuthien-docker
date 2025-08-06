@@ -1,4 +1,4 @@
-# main.py
+# bot.py
 import os
 import logging
 from telegram.ext import Application
@@ -11,7 +11,7 @@ logging.basicConfig(
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 def main():
-    """Start the bot."""
+    """Khởi động bot."""
     # Lấy token từ biến môi trường
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
@@ -23,8 +23,9 @@ def main():
     # Đăng ký tất cả các handlers từ file handlers.py
     register_handlers(application)
 
-    # Chạy bot ở chế độ polling (chú ý: đây là thay đổi quan trọng)
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    # Chạy bot ở chế độ polling
+    print("✅ Bot đang chạy ở chế độ polling...")
+    application.run_polling()
 
 if __name__ == "__main__":
     main()
