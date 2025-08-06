@@ -79,7 +79,8 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
     data = query.data
 
     if data == 'note':
-        await query.edit_message_text("📝 Chọn loại ghi nhớ:", reply_markup=get_note_type_keyboard())
+        if query.message.text != "📝 Chọn loại ghi nhớ:":
+            await query.edit_message_text("📝 Chọn loại ghi nhớ:", reply_markup=get_note_type_keyboard())
     elif data.startswith("type_"):
         note_type = data.split("_", 1)[1]
         user_states[user_id] = {"awaiting_note": True, "type": note_type}
@@ -90,14 +91,16 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             reply_text = "📖 Những ghi nhớ của bạn:\n\n"
             for i, mem in enumerate(memories):
                 reply_text += f"{i+1}. ({mem.get('note_type', 'khác')}) {mem.get('content', 'không có nội dung')}\n"
-            await query.edit_message_text(reply_text, reply_markup=get_main_keyboard())
+            if query.message.text != reply_text:
+                await query.edit_message_text(reply_text, reply_markup=get_main_keyboard())
         else:
-            await query.edit_message_text("Bạn chưa có ghi nhớ nào.", reply_markup=get_main_keyboard())
+            current_text = "Bạn chưa có ghi nhớ nào."
+            if query.message.text != current_text:
+                await query.edit_message_text(current_text, reply_markup=get_main_keyboard())
     elif data == 'clear_all':
         clear_memory(user_id)
         await query.edit_message_text("🗑️ Đã xóa toàn bộ ghi nhớ.", reply_markup=get_main_keyboard())
     else:
-        # Trả lại bàn phím chính nếu data không khớp
         await query.edit_message_text("⚠️ Lỗi: Chức năng không hợp lệ.", reply_markup=get_main_keyboard())
 
 # === ĐĂNG KÝ HANDLERS ===
