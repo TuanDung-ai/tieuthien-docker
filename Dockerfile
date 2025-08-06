@@ -1,28 +1,34 @@
-# Dockerfile
-
-# Sử dụng image Python nhẹ và hiện đại
+# Sử dụng Python 3.10-slim làm image cơ sở để giảm kích thước
 FROM python:3.10-slim
 
-# Cài đặt git để pip có thể cài các gói từ repo (nếu cần)
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+# Thiết lập biến môi trường
+ENV PYTHONUNBUFFERED=1
+ENV VIRTUAL_ENV=/app/.venv
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-# Tạo thư mục làm việc trong container
+# Cài đặt các phụ thuộc hệ thống cần thiết cho python-telegram-bot
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    python3-dev \
+    libsqlite3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Thiết lập thư mục làm việc
 WORKDIR /app
 
-# Sao chép file requirements trước để tận dụng cache của Docker
-COPY requirements.txt /app/
+# Sao chép các tệp cần thiết cho việc cài đặt
+COPY requirements.txt .
 
-# Cài đặt các thư viện cần thiết
-RUN pip install --no-cache-dir -r requirements.txt
+# Cài đặt các gói Python vào môi trường ảo
+RUN python -m venv $VIRTUAL_ENV && \
+    $VIRTUAL_ENV/bin/pip install --upgrade pip && \
+    $VIRTUAL_ENV/bin/pip install -r requirements.txt
 
-# Sao chép toàn bộ mã nguồn còn lại của ứng dụng
+# Sao chép toàn bộ mã nguồn của ứng dụng
 COPY . /app
 
-# Khai báo cổng mà ứng dụng sẽ lắng nghe
-EXPOSE 8080
-
-# === SỬA LỖI: Chuyển CMD sang dạng shell để thay thế biến ${PORT} ===
-# Bằng cách bọc lệnh gunicorn trong `["sh", "-c", "..."]`, chúng ta yêu cầu
-# Docker khởi chạy một shell. Shell này sẽ thay thế `${PORT}` bằng giá trị
-# thực (ví dụ: 8080) trước khi thực thi lệnh gunicorn.
+# Lệnh chạy ứng dụng khi container khởi động
+# -w 4: Chạy 4 worker
+# -k uvicorn.workers.UvicornWorker: Sử dụng worker class của uvicorn
+# -b 0.0.0.0:${PORT}: Bind vào tất cả các interface trên cổng đã chỉ định
 CMD ["sh", "-c", "gunicorn -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${PORT} bot:app"]
