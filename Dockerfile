@@ -6,7 +6,7 @@ ENV PYTHONUNBUFFERED=1
 ENV VIRTUAL_ENV=/app/.venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-# Cài đặt các phụ thuộc hệ thống cần thiết cho python-telegram-bot
+# Cài đặt các phụ thuộc hệ thống cần thiết
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     python3-dev \
@@ -18,7 +18,6 @@ WORKDIR /app
 
 # Sao chép các tệp cần thiết cho việc cài đặt
 COPY requirements.txt .
-COPY deploy_setup.py .
 
 # Cài đặt các gói Python vào môi trường ảo
 RUN python -m venv $VIRTUAL_ENV && \
@@ -29,5 +28,5 @@ RUN python -m venv $VIRTUAL_ENV && \
 COPY . /app
 
 # Lệnh chạy ứng dụng khi container khởi động
-# Chạy script set_webhook_once trước, sau đó mới khởi động gunicorn
-CMD [ "sh", "-c", "python deploy_setup.py && gunicorn -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${PORT} bot:app" ]
+# Chạy trực tiếp file main.py để khởi động bot polling
+CMD ["python", "main.py"]
