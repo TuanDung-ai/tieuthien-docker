@@ -18,7 +18,6 @@ WORKDIR /app
 
 # Sao chép các tệp cần thiết cho việc cài đặt
 COPY requirements.txt .
-COPY deploy_setup.py .
 
 # Cài đặt các gói Python vào môi trường ảo
 RUN python -m venv $VIRTUAL_ENV && \
@@ -29,5 +28,5 @@ RUN python -m venv $VIRTUAL_ENV && \
 COPY . /app
 
 # Lệnh chạy ứng dụng khi container khởi động
-# Đây là dòng đã được điều chỉnh để chạy bot polling
+# Chạy trực tiếp file bot.py để khởi động bot polling
 CMD ["python", "bot.py"]
