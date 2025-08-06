@@ -1,90 +1,30 @@
-# bot.py
+# main.py
 import os
-import sys
-import asyncio
-import httpx
-from fastapi import FastAPI, Request, Response
+import logging
+from telegram.ext import Application
+from modules.handlers import register_handlers
 
-from telegram import Update
-from telegram.ext import Application, ApplicationBuilder
+# Cấu hình logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
-# === Cấu hình từ biến môi trường ===
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-if not TOKEN:
-    print("LỖI NGHIÊM TRỌNG: Biến môi trường TELEGRAM_BOT_TOKEN không được thiết lập.", file=sys.stderr)
-    sys.exit(1)
+def main():
+    """Start the bot."""
+    # Lấy token từ biến môi trường
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    if not token:
+        raise ValueError("TELEGRAM_BOT_TOKEN environment variable not set.")
 
-PORT = int(os.getenv("PORT", 8080))
-ZEABUR_PUBLIC_URL = os.getenv("ZEABUR_URL")
-WEBHOOK_PATH = "/telegram-webhook"
-WEBHOOK_URL = f"{ZEABUR_PUBLIC_URL}{WEBHOOK_PATH}" if ZEABUR_PUBLIC_URL else None
+    # Tạo Application và truyền token vào
+    application = Application.builder().token(token).build()
 
-# === IMPORT các hàm ===
-try:
-    from modules.handlers import register_handlers
-    print("DEBUG: Import các module thành công.", file=sys.stderr)
-except ImportError as e:
-    print(f"LỖI KHỞI ĐỘNG: Không thể import module: {e}", file=sys.stderr)
-    sys.exit(1)
+    # Đăng ký tất cả các handlers từ file handlers.py
+    register_handlers(application)
 
-# === Khởi tạo ứng dụng FastAPI và Telegram Application ===
-app = FastAPI(docs_url=None, redoc_url=None)
-telegram_app: Application = ApplicationBuilder().token(TOKEN).build()
+    # Chạy bot ở chế độ polling (chú ý: đây là thay đổi quan trọng)
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
-@app.on_event("startup")
-async def startup_event():
-    """
-    Hàm này chạy một lần duy nhất khi ứng dụng ASGI khởi động.
-    """
-    print(f"DEBUG: Bắt đầu quá trình khởi động ứng dụng...", file=sys.stderr)
-    
-    try:
-        # Đăng ký các handlers cho bot
-        register_handlers(telegram_app)
-        print("DEBUG: Đăng ký các handlers thành công.", file=sys.stderr)
-
-        # Khởi tạo Application
-        await telegram_app.initialize()
-        print("DEBUG: Telegram Application đã được initialize.", file=sys.stderr)
-        
-    except Exception as e:
-        print(f"LỖI NGHIÊM TRỌNG trong quá trình startup: {e}", file=sys.stderr)
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Hàm này chạy khi ứng dụng tắt."""
-    print("DEBUG: Bắt đầu quá trình shutdown...", file=sys.stderr)
-    await telegram_app.shutdown()
-    print("DEBUG: Telegram Application đã được shutdown.", file=sys.stderr)
-
-# === Các Endpoints của Web App ===
-
-@app.get("/")
-@app.get("/health")
-def health_check():
-    """Endpoint để kiểm tra tình trạng hoạt động."""
-    return {"status": "ok", "message": "✅ Tiểu Thiên đang vận hành bình thường."}
-
-@app.post(WEBHOOK_PATH)
-async def telegram_webhook(request: Request):
-    """Endpoint nhận các cập nhật từ Telegram."""
-    try:
-        json_data = await request.json()
-        print(f"DEBUG: Dữ liệu JSON từ webhook: {json_data}", file=sys.stderr)
-        
-        update = Update.de_json(json_data, telegram_app.bot)
-        
-        await telegram_app.process_update(update)
-        print(f"DEBUG: Đã xử lý thành công update_id: {update.update_id}", file=sys.stderr)
-
-        return Response(status_code=200)
-
-    except Exception as e:
-        print(f"LỖI trong telegram_webhook: {e}", file=sys.stderr)
-        return Response(status_code=500)
-
-# === Chạy cục bộ để test (sử dụng uvicorn) ===
-if __name__ == '__main__':
-    print("DEBUG: Chạy cục bộ bằng uvicorn...", file=sys.stderr)
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
+if __name__ == "__main__":
+    main()
