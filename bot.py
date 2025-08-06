@@ -16,7 +16,9 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 # --- Khởi tạo và chạy FastAPI Web Server (dùng cho UptimeRobot) ---
 app = FastAPI()
 
+# Thêm decorator @app.head để xử lý yêu cầu HEAD từ UptimeRobot
 @app.get("/")
+@app.head("/")
 async def home():
     """Một endpoint đơn giản để UptimeRobot ping."""
     return {"status": "ok", "message": "Bot is alive."}
@@ -24,7 +26,14 @@ async def home():
 # Hàm chạy uvicorn trong một luồng riêng
 def run_uvicorn():
     """Chạy web server FastAPI."""
-    uvicorn.run(app, host="0.0.0.0", port=os.environ.get("PORT", 8080))
+    try:
+        # Lấy cổng từ biến môi trường và đảm bảo nó là số nguyên
+        port = int(os.environ.get("PORT", 8080))
+        uvicorn.run(app, host="0.0.0.0", port=port)
+    except ValueError as e:
+        print(f"Lỗi: PORT không phải là số. Chi tiết: {e}")
+        # Log lỗi và thoát nếu không thể chuyển đổi PORT thành số nguyên
+        exit(1)
 
 # --- Khởi tạo và chạy Telegram Bot Polling ---
 def main():
