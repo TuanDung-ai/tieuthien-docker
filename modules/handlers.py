@@ -7,8 +7,8 @@ from memory.memory_manager import (
 )
 from modules.ai_module import get_ai_response_with_memory
 
-# Không cần biến toàn cục user_states nữa
-# user_states = {}
+# Bây giờ chúng ta có thể sử dụng biến toàn cục user_states
+user_states = {}  # user_id → trạng thái (ghi nhớ)
 
 # === GIAO DIỆN NÚT ===
 def get_main_keyboard():
@@ -53,26 +53,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_text = update.message.text
     
-    # Lấy trạng thái từ context.user_data
-    state = context.user_data.get("state")
+    # Kiểm tra trạng thái từ biến toàn cục
+    state = user_states.get(user_id)
     
-    # Kiểm tra xem người dùng có đang ở trạng thái chờ ghi nhớ hay không
     if state and state.get("awaiting_note"):
         note_type = state.get("type")
         
-        # Gọi hàm save_memory để lưu ghi nhớ
         save_memory(user_id, user_text, note_type)
         
         # Xóa trạng thái của user sau khi đã lưu
-        context.user_data.pop("state")
+        user_states.pop(user_id)
         
-        # Phản hồi người dùng và hiển thị bàn phím chính
         await update.message.reply_text(
             f"✅ Ghi nhớ của bạn đã được lưu với loại: '{note_type}'.",
             reply_markup=get_main_keyboard()
         )
     else:
-        # Nếu không ở trạng thái ghi nhớ, bot sẽ phản hồi bằng AI
         ai_reply = await get_ai_response_with_memory(user_id, user_text)
         await update.message.reply_text(ai_reply, reply_markup=get_main_keyboard())
 
@@ -88,8 +84,8 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         await query.edit_message_text("📝 Chọn loại ghi nhớ:", reply_markup=get_note_type_keyboard())
     elif data.startswith("type_"):
         note_type = data.split("_", 1)[1]
-        # Lưu trạng thái vào context.user_data
-        context.user_data["state"] = {"awaiting_note": True, "type": note_type}
+        # Lưu trạng thái vào biến toàn cục
+        user_states[user_id] = {"awaiting_note": True, "type": note_type}
         await query.edit_message_text(f"✍️ Gõ nội dung để ghi nhớ dạng '{note_type}':")
     elif data == 'view':
         memories = get_memory(user_id)
@@ -106,8 +102,6 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
     elif data == 'clear_all':
         clear_memory(user_id)
         await query.edit_message_text("🗑️ Đã xóa toàn bộ ghi nhớ.", reply_markup=get_main_keyboard())
-    else:
-        await query.edit_message_text("⚠️ Lỗi: Chức năng không hợp lệ.", reply_markup=get_main_keyboard())
 
 # === ĐĂNG KÝ HANDLERS ===
 def register_handlers(app: Application):
