@@ -18,6 +18,7 @@ WORKDIR /app
 
 # Sao chép các tệp cần thiết cho việc cài đặt
 COPY requirements.txt .
+COPY deploy_setup.py .
 
 # Cài đặt các gói Python vào môi trường ảo
 RUN python -m venv $VIRTUAL_ENV && \
@@ -28,7 +29,5 @@ RUN python -m venv $VIRTUAL_ENV && \
 COPY . /app
 
 # Lệnh chạy ứng dụng khi container khởi động
-# -w 4: Chạy 4 worker
-# -k uvicorn.workers.UvicornWorker: Sử dụng worker class của uvicorn
-# -b 0.0.0.0:${PORT}: Bind vào tất cả các interface trên cổng đã chỉ định
-CMD ["sh", "-c", "gunicorn -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${PORT} bot:app"]
+# Chạy script set_webhook_once trước, sau đó mới khởi động gunicorn
+CMD [ "sh", "-c", "python deploy_setup.py && gunicorn -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${PORT} bot:app" ]
