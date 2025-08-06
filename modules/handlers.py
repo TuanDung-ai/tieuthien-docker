@@ -7,7 +7,8 @@ from memory.memory_manager import (
 )
 from modules.ai_module import get_ai_response_with_memory
 
-user_states = {}  # user_id → trạng thái (ghi nhớ)
+# Không cần biến toàn cục user_states nữa
+# user_states = {}
 
 # === GIAO DIỆN NÚT ===
 def get_main_keyboard():
@@ -52,15 +53,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_text = update.message.text
     
+    # Lấy trạng thái từ context.user_data
+    state = context.user_data.get("state")
+    
     # Kiểm tra xem người dùng có đang ở trạng thái chờ ghi nhớ hay không
-    if user_id in user_states and user_states[user_id].get("awaiting_note"):
-        note_type = user_states[user_id].get("type")
+    if state and state.get("awaiting_note"):
+        note_type = state.get("type")
         
         # Gọi hàm save_memory để lưu ghi nhớ
         save_memory(user_id, user_text, note_type)
         
         # Xóa trạng thái của user sau khi đã lưu
-        del user_states[user_id]
+        context.user_data.pop("state")
         
         # Phản hồi người dùng và hiển thị bàn phím chính
         await update.message.reply_text(
@@ -84,7 +88,8 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         await query.edit_message_text("📝 Chọn loại ghi nhớ:", reply_markup=get_note_type_keyboard())
     elif data.startswith("type_"):
         note_type = data.split("_", 1)[1]
-        user_states[user_id] = {"awaiting_note": True, "type": note_type}
+        # Lưu trạng thái vào context.user_data
+        context.user_data["state"] = {"awaiting_note": True, "type": note_type}
         await query.edit_message_text(f"✍️ Gõ nội dung để ghi nhớ dạng '{note_type}':")
     elif data == 'view':
         memories = get_memory(user_id)
@@ -92,21 +97,17 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             reply_text = "📖 Những ghi nhớ của bạn:\n\n"
             for i, mem in enumerate(memories):
                 reply_text += f"{i+1}. ({mem.get('note_type', 'khác')}) {mem.get('content', 'không có nội dung')}\n"
-            
-            # --- FIX LỖI: Chỉ sửa tin nhắn nếu nội dung đã thay đổi ---
             if query.message.text != reply_text:
                 await query.edit_message_text(reply_text, reply_markup=get_main_keyboard())
         else:
             current_text = "Bạn chưa có ghi nhớ nào."
-            # --- FIX LỖI: Chỉ sửa tin nhắn nếu nội dung đã thay đổi ---
             if query.message.text != current_text:
                 await query.edit_message_text(current_text, reply_markup=get_main_keyboard())
     elif data == 'clear_all':
         clear_memory(user_id)
         await query.edit_message_text("🗑️ Đã xóa toàn bộ ghi nhớ.", reply_markup=get_main_keyboard())
-    # Chỉnh sửa: Loại bỏ nhánh else cuối cùng để bot không bị lỗi nếu có nút mới
-    # else:
-    #     await query.edit_message_text("⚠️ Lỗi: Chức năng không hợp lệ.", reply_markup=get_main_keyboard())
+    else:
+        await query.edit_message_text("⚠️ Lỗi: Chức năng không hợp lệ.", reply_markup=get_main_keyboard())
 
 # === ĐĂNG KÝ HANDLERS ===
 def register_handlers(app: Application):
