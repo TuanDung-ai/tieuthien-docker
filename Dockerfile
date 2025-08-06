@@ -28,5 +28,5 @@ RUN python -m venv $VIRTUAL_ENV && \
 COPY . /app
 
 # Lệnh chạy ứng dụng khi container khởi động
-# Chạy trực tiếp file bot.py để khởi động bot polling
+# Chạy file bot.py để khởi động cả web server và bot polling
 CMD ["python", "bot.py"]
