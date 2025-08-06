@@ -56,8 +56,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     state = user_states.get(user_id)
     if state and state.get("awaiting_note"):
         note_type = user_states[user_id]["type"]
+        
+        # Gọi hàm save_memory để lưu nội dung vào Supabase
         save_memory(user_id, user_text, note_type)
-        user_states.pop(user_id) # Dùng pop để xóa trạng thái một cách an toàn
+        
+        # Xóa trạng thái sau khi lưu
+        user_states.pop(user_id)
         
         # Phản hồi lại người dùng và hiển thị bàn phím chính
         await update.message.reply_text(f"✅ Ghi nhớ của bạn đã được lưu với loại: '{note_type}'.", reply_markup=get_main_keyboard())
