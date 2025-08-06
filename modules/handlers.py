@@ -1,12 +1,10 @@
+# modules/handlers.py
 import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
-
-# ✅ Dùng memory_manager thay vì memory_storage
 from memory.memory_manager import (
-    save_memory, get_memory, delete_memory
+    save_memory, get_memory, delete_memory, clear_memory
 )
-
 from modules.ai_module import get_ai_response_with_memory
 
 user_states = {}  # user_id → trạng thái (ghi nhớ)
@@ -37,14 +35,8 @@ def get_note_type_keyboard():
         ]
     ])
 
-# === LẤY GHI NHỚ GẦN NHẤT (cho prompt AI) ===
-def get_recent_memories_for_prompt(user_id, limit=3):
-    notes = get_memory(user_id)
-    recent = notes[:limit]
-    return "\n".join(f"- ({n['note_type']}) {n['content']}" for n in recent)
-
 # === HANDLERS CHÍNH ===
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Chào chủ nhân, Tiểu Thiên đã sẵn sàng!",
         reply_markup=get_main_keyboard()
@@ -61,19 +53,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
 
     # Xử lý khi đang chờ ghi nhớ
-    if user_states.get(user_id, {}).get("awaiting_note"):
+    state = user_states.get(user_id)
+    if state and state.get("awaiting_note"):
         note_type = user_states[user_id]["type"]
         save_memory(user_id, user_text, note_type)
-        user_states[user_id] = {}
-        await update.message.reply_text("✅ Ghi nhớ của bạn đã được lưu.")
-        return
+        user_states.pop(user_id) # Dùng pop để xóa trạng thái một cách an toàn
+        
+        # Phản hồi lại người dùng và hiển thị bàn phím chính
+        await update.message.reply_text(f"✅ Ghi nhớ của bạn đã được lưu với loại: '{note_type}'.", reply_markup=get_main_keyboard())
+    else:
+        # Phản hồi AI nếu không phải là ghi nhớ
+        ai_reply = await get_ai_response_with_memory(user_id, user_text)
+        await update.message.reply_text(ai_reply, reply_markup=get_main_keyboard())
 
-    # Phản hồi AI
-    ai_reply = await get_ai_response_with_memory(user_id, user_text)
-    await update.message.reply_text(ai_reply, reply_markup=get_main_keyboard())
 
 # === XỬ LÝ NÚT BẤM ===
-async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
     await query.answer()
@@ -89,20 +84,21 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         memories = get_memory(user_id)
         if memories:
             reply_text = "📖 Những ghi nhớ của bạn:\n\n"
-            for mem in memories:
-                reply_text += f"- ({mem['note_type']}) {mem['content']}\n"
+            for i, mem in enumerate(memories):
+                reply_text += f"{i+1}. ({mem.get('note_type', 'khác')}) {mem.get('content', 'không có nội dung')}\n"
             await query.edit_message_text(reply_text, reply_markup=get_main_keyboard())
         else:
             await query.edit_message_text("Bạn chưa có ghi nhớ nào.", reply_markup=get_main_keyboard())
     elif data == 'clear_all':
-        delete_memory(user_id)
+        clear_memory(user_id)
         await query.edit_message_text("🗑️ Đã xóa toàn bộ ghi nhớ.", reply_markup=get_main_keyboard())
     else:
-        await query.edit_message_text("⚠️ Chức năng chưa khả dụng.", reply_markup=get_main_keyboard())
+        # Trả lại bàn phím chính nếu data không khớp
+        await query.edit_message_text("⚠️ Lỗi: Chức năng không hợp lệ.", reply_markup=get_main_keyboard())
 
 # === ĐĂNG KÝ HANDLERS ===
 def register_handlers(app: Application):
-    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    app.add_handler(CallbackQueryHandler(button_callback))
+    app.add_handler(CallbackQueryHandler(handle_callback_query))
