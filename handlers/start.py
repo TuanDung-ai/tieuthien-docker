@@ -1,7 +1,7 @@
 # handlers/start.py
 from telegram import Update
 from telegram.ext import ContextTypes
-from .utils import get_main_keyboard
+from modules.buttons import get_main_keyboard
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
