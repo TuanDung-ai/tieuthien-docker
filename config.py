@@ -14,4 +14,8 @@ MAX_TOKENS = 400
 TEMPERATURE = 0.6
 
 PORT = int(os.getenv("PORT", 8080))
+
+# NEW: timeout cấu hình cho polling Telegram
 POLLING_TIMEOUT = int(os.getenv("POLLING_TIMEOUT", 30))
+READ_TIMEOUT = int(os.getenv("READ_TIMEOUT", 30))
+WRITE_TIMEOUT = int(os.getenv("WRITE_TIMEOUT", 30))
