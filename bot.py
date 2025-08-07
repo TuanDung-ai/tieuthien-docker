@@ -15,12 +15,12 @@ from handlers.register_handlers import register_handlers
 from core.logging_config import setup_logging
 import telegram
 
-print("PTB version:", telegram.__version__)  # ✅ Xác nhận đang chạy PTB 21.1
+print("PTB version:", telegram.__version__)  # In version đang chạy
 
 # Thiết lập logging
 setup_logging()
 
-# FastAPI app để healthcheck
+# FastAPI app
 app = FastAPI()
 
 @app.get("/")
@@ -42,12 +42,12 @@ async def status():
 def run_uvicorn():
     uvicorn.run(app, host="0.0.0.0", port=PORT)
 
-# Hàm khởi động Telegram bot
+# Khởi động Telegram bot
 def main():
     if not BOT_TOKEN:
         raise ValueError("TELEGRAM_BOT_TOKEN is missing.")
 
-    # ✅ Cấu hình timeout chuẩn theo PTB v21.1
+    # PTB v21.2+ supports get_updates_timeout
     app_bot = (
         Application.builder()
         .token(BOT_TOKEN)
@@ -62,7 +62,7 @@ def main():
     print(f"✅ Bot is running with polling timeout={POLLING_TIMEOUT}s...")
     app_bot.run_polling()
 
-# Khởi động song song bot và API
+# Chạy song song FastAPI + Telegram bot
 if __name__ == "__main__":
     threading.Thread(target=run_uvicorn, daemon=True).start()
     main()
