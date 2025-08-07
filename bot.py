@@ -1,6 +1,5 @@
 # bot.py
-import telegram
-print("PTB version:", telegram.__version__)
+
 import threading
 from fastapi import FastAPI
 import uvicorn
@@ -14,6 +13,9 @@ from config import (
 )
 from handlers.register_handlers import register_handlers
 from core.logging_config import setup_logging
+import telegram
+
+print("PTB version:", telegram.__version__)  # ✅ Xác nhận đang chạy PTB 21.1
 
 # Thiết lập logging
 setup_logging()
@@ -45,7 +47,7 @@ def main():
     if not BOT_TOKEN:
         raise ValueError("TELEGRAM_BOT_TOKEN is missing.")
 
-    # Khởi tạo bot với timeout cấu hình từ .env
+    # ✅ Cấu hình timeout chuẩn theo PTB v21.1
     app_bot = (
         Application.builder()
         .token(BOT_TOKEN)
@@ -60,7 +62,7 @@ def main():
     print(f"✅ Bot is running with polling timeout={POLLING_TIMEOUT}s...")
     app_bot.run_polling()
 
-# Chạy song song bot + FastAPI
+# Khởi động song song bot và API
 if __name__ == "__main__":
     threading.Thread(target=run_uvicorn, daemon=True).start()
     main()
