@@ -1,9 +1,9 @@
 # handlers/memory.py
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from memory.memory_manager import save_memory, get_memory, clear_memory, delete_single_memory
+from modules.memory_manager import save_memory, get_memory, clear_memory, delete_single_memory
 from modules.ai_module import get_ai_response_with_memory
-from .utils import get_main_keyboard, get_note_type_keyboard
+from modules.buttons import get_main_keyboard, get_note_type_keyboard
 
 user_states = {}
 
