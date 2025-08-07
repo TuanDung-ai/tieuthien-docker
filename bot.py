@@ -1,15 +1,14 @@
-# === B7: bot.py – Khởi chạy bot & FastAPI ===
-
-# bot.py
+import logging
 import threading
 from fastapi import FastAPI
-import uvicorn
 from telegram.ext import Application
+import uvicorn
 from config import TELEGRAM_BOT_TOKEN, PORT
 from handlers.register_handlers import register_handlers
-from core.logging_config import setup_logging
 
-setup_logging()
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
 
 app = FastAPI()
 
@@ -24,7 +23,7 @@ def run_uvicorn():
 def main():
     if not TELEGRAM_BOT_TOKEN:
         raise ValueError("TELEGRAM_BOT_TOKEN is missing.")
-
+    
     app_bot = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     register_handlers(app_bot)
     print("✅ Bot is running...")
