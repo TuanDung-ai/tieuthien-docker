@@ -1,7 +1,7 @@
 # handlers/register_handlers.py
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from .start import start_command, help_command
-from .memory import handle_message, handle_callback_query
+from modules.memory_manager import handle_message, handle_callback_query
 
 def register_handlers(app: Application):
     app.add_handler(CommandHandler("start", start_command))
