@@ -17,7 +17,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if state and state.get("awaiting_note"):
         note_type = state.get("type")
-        save_memory(user_id, user_text, note_type)
+        save_user_memory(user_id, user_text, note_type)
         clear_user_state(user_id)
         await update.message.reply_text(
             f"✅ Ghi nhớ của bạn đã được Thiên Cơ lưu lại với loại: '{note_type}'.",
@@ -40,7 +40,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         set_user_state(user_id, {"awaiting_note": True, "type": note_type})
         await query.edit_message_text(f"✍️ Gõ nội dung để Thiên Cơ ghi nhớ dạng '{note_type}':")
     elif data == 'view':
-        memories = get_memory(user_id)
+        memories = get_user_memories(user_id)
         if memories:
             keyboard = []
             reply_text = "📖 Những ghi nhớ của bạn:\n\n"
@@ -54,12 +54,12 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         else:
             await query.edit_message_text("Bạn chưa có ghi nhớ nào.", reply_markup=get_main_keyboard())
     elif data == 'clear_all':
-        clear_memory(user_id)
+        clear_user_memories(user_id)
         await query.edit_message_text("🗑️ Đã xóa toàn bộ ghi nhớ.", reply_markup=get_main_keyboard())
     elif data.startswith("delete_"):
         try:
             note_id = int(data.split("_")[1])
-            delete_single_memory(user_id, note_id)
+            delete_user_memory(user_id, note_id)
             await query.edit_message_text(f"✅ Đã xóa ghi nhớ có ID: {note_id}.", reply_markup=get_main_keyboard())
         except (ValueError, IndexError):
             await query.edit_message_text("Lỗi khi xóa ghi nhớ.", reply_markup=get_main_keyboard())
