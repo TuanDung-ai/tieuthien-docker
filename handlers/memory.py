@@ -4,19 +4,18 @@ from telegram.ext import ContextTypes
 from modules.memory_manager import save_memory, get_memory, clear_memory, delete_single_memory
 from modules.ai_module import get_ai_response_with_memory
 from modules.buttons import get_main_keyboard, get_note_type_keyboard
-
-user_states = {}
+from core.state_manager import get_user_state, set_user_state, clear_user_state
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_text = update.message.text
 
-    state = user_states.get(user_id)
+    state = get_user_state(user_id)
 
     if state and state.get("awaiting_note"):
         note_type = state.get("type")
         save_memory(user_id, user_text, note_type)
-        user_states.pop(user_id)
+        clear_user_state(user_id)
         await update.message.reply_text(
             f"✅ Ghi nhớ của bạn đã được Thiên Cơ lưu lại với loại: '{note_type}'.",
             reply_markup=get_main_keyboard()
@@ -35,7 +34,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         await query.edit_message_text("📝 Chọn loại ghi nhớ:", reply_markup=get_note_type_keyboard())
     elif data.startswith("type_"):
         note_type = data.split("_", 1)[1]
-        user_states[user_id] = {"awaiting_note": True, "type": note_type}
+        set_user_state(user_id, {"awaiting_note": True, "type": note_type})
         await query.edit_message_text(f"✍️ Gõ nội dung để Thiên Cơ ghi nhớ dạng '{note_type}':")
     elif data == 'view':
         memories = get_memory(user_id)
