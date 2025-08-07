@@ -3,7 +3,7 @@ import os
 import logging
 import threading
 from telegram.ext import Application
-from modules.handlers import register_handlers
+from handlers.register_handlers import register_handlers
 from fastapi import FastAPI
 import uvicorn
 
