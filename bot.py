@@ -1,5 +1,6 @@
 # bot.py
-
+import telegram
+print("PTB version:", telegram.__version__)
 import threading
 from fastapi import FastAPI
 import uvicorn
