@@ -1,12 +1,10 @@
-# handlers/register_handlers.py
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from handlers.commands import (
     cmd_ghi_nho, cmd_xem_nho, cmd_xoa_nho,
     cmd_xoa_tatca, cmd_tro_giup
 )
 from handlers.message_handler import handle_message
-from modules.memory_manager import handle_callback_query
-
+from handlers.callbacks import handle_callback_query  # ✅ Đúng nguồn
 
 def register_handlers(app: Application):
     app.add_handler(CommandHandler("ghi_nho", cmd_ghi_nho))
