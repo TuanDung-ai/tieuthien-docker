@@ -1,3 +1,4 @@
+# config.py
 import os
 from dotenv import load_dotenv
 
@@ -13,3 +14,4 @@ MAX_TOKENS = 400
 TEMPERATURE = 0.6
 
 PORT = int(os.getenv("PORT", 8080))
+POLLING_TIMEOUT = int(os.getenv("POLLING_TIMEOUT", 30))
