@@ -1,4 +1,5 @@
 # bot.py
+
 import threading
 from fastapi import FastAPI
 import uvicorn
@@ -13,10 +14,10 @@ from config import (
 from handlers.register_handlers import register_handlers
 from core.logging_config import setup_logging
 
-# Thiết lập logging chuẩn
+# Thiết lập logging
 setup_logging()
 
-# Khởi tạo FastAPI app
+# FastAPI app để healthcheck
 app = FastAPI()
 
 @app.get("/")
@@ -34,15 +35,16 @@ async def status():
         "message": "Bot is healthy and ready"
     }
 
-# Chạy FastAPI song song
+# Chạy FastAPI server
 def run_uvicorn():
     uvicorn.run(app, host="0.0.0.0", port=PORT)
 
-# Hàm khởi động bot Telegram
+# Hàm khởi động Telegram bot
 def main():
     if not BOT_TOKEN:
         raise ValueError("TELEGRAM_BOT_TOKEN is missing.")
 
+    # Khởi tạo bot với timeout cấu hình từ .env
     app_bot = (
         Application.builder()
         .token(BOT_TOKEN)
@@ -55,9 +57,9 @@ def main():
     register_handlers(app_bot)
 
     print(f"✅ Bot is running with polling timeout={POLLING_TIMEOUT}s...")
-    app_bot.run_polling()  # Không còn cảnh báo PTBDeprecationWarning
+    app_bot.run_polling()
 
-# Khởi động FastAPI + Telegram song song
+# Chạy song song bot + FastAPI
 if __name__ == "__main__":
     threading.Thread(target=run_uvicorn, daemon=True).start()
     main()
