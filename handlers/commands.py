@@ -14,13 +14,13 @@ async def cmd_ghi_nho(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not content:
         await update.message.reply_text("⚠️ Bạn cần nhập nội dung để ghi nhớ.")
         return
-    save_memory(user_id, content)
+    save_user_memory(user_id, content)
     await update.message.reply_text("✅ Đã ghi nhớ.")
 
 
 async def cmd_xem_nho(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    memories = get_memory(user_id)
+    memories = get_user_memories(user_id)
     if not memories:
         await update.message.reply_text("📭 Bạn chưa có ghi nhớ nào.")
         return
@@ -40,7 +40,7 @@ async def cmd_xoa_nho(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         note_id = int(context.args[0])
-        delete_single_memory(user_id, note_id)
+        delete_user_memory(user_id, note_id)
         await update.message.reply_text(f"🗑️ Đã xoá ghi nhớ ID {note_id}.")
     except ValueError:
         await update.message.reply_text("❌ ID phải là số.")
@@ -48,7 +48,7 @@ async def cmd_xoa_nho(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_xoa_tatca(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    clear_memory(user_id)
+    clear_user_memories(user_id)
     await update.message.reply_text("🧹 Đã xoá toàn bộ ghi nhớ.")
 
 
