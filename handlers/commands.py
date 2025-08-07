@@ -1,7 +1,10 @@
 # handlers/commands.py
 from telegram import Update
 from telegram.ext import ContextTypes
-from modules.memory_manager import save_memory, get_memory, delete_single_memory, clear_memory
+from services.memory_service import (
+    save_user_memory, get_user_memories,
+    delete_user_memory, clear_user_memories
+)
 from modules.buttons import get_main_keyboard
 
 
